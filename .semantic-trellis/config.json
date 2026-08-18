@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "projectId": "semantictrellis",
+  "source": {
+    "extensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cs",
+      ".go",
+      ".h",
+      ".hpp",
+      ".java",
+      ".js",
+      ".json",
+      ".jsx",
+      ".kt",
+      ".lua",
+      ".md",
+      ".mjs",
+      ".php",
+      ".proto",
+      ".ps1",
+      ".py",
+      ".rb",
+      ".rs",
+      ".sh",
+      ".sql",
+      ".swift",
+      ".toml",
+      ".ts",
+      ".tsx",
+      ".yaml",
+      ".yml"
+    ],
+    "excludeDirectories": [
+      ".git",
+      ".semantic-trellis",
+      ".idea",
+      ".vscode",
+      "Library",
+      "Temp",
+      "build",
+      "coverage",
+      "dist",
+      "node_modules",
+      "obj",
+      "out",
+      "target",
+      "vendor"
+    ],
+    "maxFileBytes": 1000000
+  },
+  "maintenance": {
+    "impactDepth": 2,
+    "fullAuditChangeRatio": 0.1
+  }
+}

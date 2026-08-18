@@ -1,0 +1,409 @@
+{
+  "schemaVersion": 1,
+  "projectId": "semantictrellis",
+  "nodes": [
+    {
+      "id": "application-workflows",
+      "name": "Application Workflows",
+      "kind": "subsystem",
+      "summary": "Coordinates initialization, bootstrap, curation, synchronization, audit, and status use cases.",
+      "sources": [
+        {
+          "path": "src/application/initialize.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/bootstrap.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/curate.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/sync.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/audit.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/status.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/index.ts",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "application",
+        "workflow"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
+      "id": "architecture-governance",
+      "name": "Architecture Governance",
+      "kind": "invariant",
+      "summary": "Keeps architecture decisions, repository language, contribution rules, and the delivery roadmap explicit and reviewable.",
+      "sources": [
+        {
+          "path": "AGENTS.md",
+          "role": "primary"
+        },
+        {
+          "path": "CONTRIBUTING.md",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0001-modular-monolith.md",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/roadmap.md",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "governance",
+        "architecture"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
+      "id": "build-and-delivery-tooling",
+      "name": "Build and Delivery Tooling",
+      "kind": "component",
+      "summary": "Defines the Node.js package, TypeScript compiler policy, dependency lock, and continuous integration workflow.",
+      "sources": [
+        {
+          "path": "package.json",
+          "role": "primary"
+        },
+        {
+          "path": "package-lock.json",
+          "role": "supporting"
+        },
+        {
+          "path": "tsconfig.json",
+          "role": "primary"
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "build",
+        "ci",
+        "tooling"
+      ],
+      "status": "approved",
+      "locked": false
+    },
+    {
+      "id": "command-line-adapter",
+      "name": "Command-Line Adapter",
+      "kind": "component",
+      "summary": "Exposes the SemanticTrellis lifecycle through the strellis command-line interface.",
+      "sources": [
+        {
+          "path": "src/cli/index.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/version.ts",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "cli",
+        "adapter"
+      ],
+      "status": "approved",
+      "locked": false
+    },
+    {
+      "id": "curated-graph-domain",
+      "name": "Curated Graph Domain",
+      "kind": "subsystem",
+      "summary": "Defines stable semantic identities, graph patch transactions, repository snapshots, review queues, and graph audit rules.",
+      "sources": [
+        {
+          "path": "src/domain/model.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/domain/config.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "src/domain/graph.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/domain/review.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "src/domain/snapshot.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/architecture/storage-model.md",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0002-curated-graph-authority.md",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0003-delta-maintenance.md",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "domain",
+        "graph",
+        "incremental"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
+      "id": "curation-patch-contract",
+      "name": "Curation Patch Contract",
+      "kind": "concept",
+      "summary": "Defines the explicit review transaction used by humans, agents, and future visual tooling to modify the canonical graph.",
+      "sources": [
+        {
+          "path": "docs/curation-patches.md",
+          "role": "primary"
+        },
+        {
+          "path": "examples/curation-patch.example.json",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "curation",
+        "transaction",
+        "review"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
+      "id": "repository-infrastructure",
+      "name": "Repository Infrastructure",
+      "kind": "subsystem",
+      "summary": "Owns repository scanning, content hashing, project layout, validated JSON persistence, and local state boundaries.",
+      "sources": [
+        {
+          "path": "src/infrastructure/repository-scanner.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/infrastructure/project-store.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/infrastructure/json-store.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "src/infrastructure/layout.ts",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "infrastructure",
+        "repository",
+        "persistence"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
+      "id": "semantic-provider-boundary",
+      "name": "Semantic Provider Boundary",
+      "kind": "component",
+      "summary": "Defines provider-neutral contracts for future AI bootstrap and incremental semantic maintenance adapters.",
+      "sources": [
+        {
+          "path": "src/ports/semantic-provider.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/public.ts",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "port",
+        "ai",
+        "provider"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
+      "id": "semantic-trellis-product",
+      "name": "SemanticTrellis Product",
+      "kind": "system",
+      "summary": "The complete product that turns repository understanding into a durable, curated semantic graph.",
+      "sources": [
+        {
+          "path": "README.md",
+          "role": "primary"
+        },
+        {
+          "path": "docs/architecture/overview.md",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "product",
+        "semantic-graph"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
+      "id": "verification-suite",
+      "name": "Verification Suite",
+      "kind": "component",
+      "summary": "Verifies snapshot deltas, graph integrity, and the complete local project lifecycle.",
+      "sources": [
+        {
+          "path": "test/snapshot.test.ts",
+          "role": "primary"
+        },
+        {
+          "path": "test/graph.test.ts",
+          "role": "primary"
+        },
+        {
+          "path": "test/project-flow.test.ts",
+          "role": "primary"
+        }
+      ],
+      "tags": [
+        "test",
+        "verification"
+      ],
+      "status": "approved",
+      "locked": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "application-depends-on-domain",
+      "from": "application-workflows",
+      "to": "curated-graph-domain",
+      "relation": "depends-on",
+      "description": "Application workflows coordinate pure graph and change-set rules.",
+      "status": "approved"
+    },
+    {
+      "id": "application-depends-on-infrastructure",
+      "from": "application-workflows",
+      "to": "repository-infrastructure",
+      "relation": "depends-on",
+      "description": "Application workflows load, scan, and persist repository state through infrastructure adapters.",
+      "status": "approved"
+    },
+    {
+      "id": "cli-depends-on-application",
+      "from": "command-line-adapter",
+      "to": "application-workflows",
+      "relation": "depends-on",
+      "description": "The CLI delegates all behavior to application use cases.",
+      "status": "approved"
+    },
+    {
+      "id": "governance-configures-product",
+      "from": "architecture-governance",
+      "to": "semantic-trellis-product",
+      "relation": "configures",
+      "description": "Architecture records and repository rules constrain product evolution.",
+      "status": "approved"
+    },
+    {
+      "id": "patch-contract-configures-domain",
+      "from": "curation-patch-contract",
+      "to": "curated-graph-domain",
+      "relation": "configures",
+      "description": "The patch contract defines the only reviewed mutation boundary for the canonical graph.",
+      "status": "approved"
+    },
+    {
+      "id": "product-contains-application",
+      "from": "semantic-trellis-product",
+      "to": "application-workflows",
+      "relation": "contains",
+      "description": "The product exposes its lifecycle through application workflows.",
+      "status": "approved"
+    },
+    {
+      "id": "product-contains-cli",
+      "from": "semantic-trellis-product",
+      "to": "command-line-adapter",
+      "relation": "contains",
+      "description": "The product includes a command-line delivery adapter.",
+      "status": "approved"
+    },
+    {
+      "id": "product-contains-domain",
+      "from": "semantic-trellis-product",
+      "to": "curated-graph-domain",
+      "relation": "contains",
+      "description": "The product owns the canonical graph rules and stable domain model.",
+      "status": "approved"
+    },
+    {
+      "id": "product-contains-infrastructure",
+      "from": "semantic-trellis-product",
+      "to": "repository-infrastructure",
+      "relation": "contains",
+      "description": "The product owns repository and persistence infrastructure.",
+      "status": "approved"
+    },
+    {
+      "id": "product-contains-provider-boundary",
+      "from": "semantic-trellis-product",
+      "to": "semantic-provider-boundary",
+      "relation": "contains",
+      "description": "The product reserves a provider-neutral semantic automation boundary.",
+      "status": "approved"
+    },
+    {
+      "id": "provider-boundary-depends-on-domain",
+      "from": "semantic-provider-boundary",
+      "to": "curated-graph-domain",
+      "relation": "depends-on",
+      "description": "Provider contracts exchange domain snapshots, changes, graphs, and patches.",
+      "status": "approved"
+    },
+    {
+      "id": "tooling-configures-product",
+      "from": "build-and-delivery-tooling",
+      "to": "semantic-trellis-product",
+      "relation": "configures",
+      "description": "Build, type, dependency, and CI policy govern product delivery.",
+      "status": "approved"
+    },
+    {
+      "id": "verification-validates-product",
+      "from": "verification-suite",
+      "to": "semantic-trellis-product",
+      "relation": "validates",
+      "description": "Tests validate both pure rules and the complete application lifecycle.",
+      "status": "approved"
+    }
+  ]
+}

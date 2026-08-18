@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "operations": [
+    {
+      "op": "upsert-node",
+      "node": {
+        "id": "repository-foundation",
+        "name": "Repository Foundation",
+        "kind": "system",
+        "summary": "Owns the repository entry point and foundational behavior.",
+        "sources": [
+          {
+            "path": "src/index.ts",
+            "role": "primary"
+          }
+        ],
+        "tags": [
+          "foundation"
+        ],
+        "status": "approved",
+        "locked": true
+      }
+    },
+    {
+      "op": "mark-reviewed",
+      "paths": [
+        "src/index.ts"
+      ]
+    }
+  ]
+}
