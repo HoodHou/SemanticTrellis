@@ -11,18 +11,19 @@
 
 ## Milestone 1 - Structural contributions
 
-- Add Git-aware repository discovery.
-- Introduce parser adapters and a language registry.
-- Store per-file symbol and relationship contributions.
+- [x] Add Git-aware repository discovery.
+- [x] Introduce TypeScript/JavaScript and C# parser adapters with a shared
+  language registry.
+- [x] Store per-file symbol and relationship contributions.
 - Re-resolve only keys affected by changed files.
-- Produce deterministic impact sets.
+- [x] Produce deterministic symbol search and bounded reference traces.
 
 ## Milestone 2 - AI bootstrap
 
-- Add provider-neutral summarizer and curator ports.
-- Create resumable full-repository summarization jobs.
-- Propose stable semantic nodes from summaries and structural facts.
-- Add confidence, rationale, and provenance to proposals.
+- Define direct provider-neutral summarizer and curator adapter ports.
+- [x] Create resumable full-repository Agent summarization jobs.
+- [x] Expose complete file summaries and structural facts for stable Agent graph proposals.
+- [x] Add confidence, producer, model, risk, and source evidence to summaries.
 - Support offline and local-model adapters.
 
 ## Milestone 3 - Curator workflow
@@ -30,7 +31,7 @@
 - Build an interactive review queue.
 - Merge, split, rename, lock, and connect semantic nodes.
 - Show source evidence for every proposed operation.
-- Store review decisions as graph patches.
+- [x] Store review decisions as graph patches.
 
 ## Milestone 4 - Incremental semantic maintenance
 
@@ -44,6 +45,7 @@
 
 - [x] Expose graph queries, review state, audit, sync, and guarded curation over
   local stdio MCP.
+- [x] Expose structural build, grep, file-symbol, and trace tools over MCP.
 - Add Codex, Claude Code, Cursor, and editor integrations.
 - Provide repository map, semantic search, trace, and impact tools.
 - Add token and latency measurements.

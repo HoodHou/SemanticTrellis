@@ -36,6 +36,13 @@ describe("MCP stdio entry point", () => {
       });
       expect(status.isError).not.toBe(true);
       expect(status.structuredContent).toMatchObject({ files: 1, pendingReviews: 1 });
+
+      const structure = await client.callTool({
+        name: "semantic_trellis_structure",
+        arguments: {},
+      });
+      expect(structure.isError).not.toBe(true);
+      expect(structure.structuredContent).toMatchObject({ filesSupported: 1, parsedFiles: 1 });
     } finally {
       await client.close();
     }

@@ -4,36 +4,53 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   auditProject,
-  bootstrapProject,
+  buildStructuralIndex,
   curateProject,
+  getAgentBootstrapStatus,
+  getFileSymbols,
+  grepStructure,
   initializeProject,
+  previewAgentBootstrap,
   projectStatus,
+  startAgentBootstrap,
   syncProject,
+  traceProjectStructure,
 } from "../application/index.js";
 import type { AuditIssue } from "../domain/model.js";
-import { serveSemanticTrellisStdio } from "../mcp/stdio.js";
 import { VERSION } from "../version.js";
 
 const HELP = `SemanticTrellis ${VERSION}
 
 Usage:
   strellis init [repository]
-  strellis bootstrap [repository]
+  strellis bootstrap [repository] [--allow-source-disclosure] [--max-chunk-characters N]
+  strellis bootstrap-preview [repository]
+  strellis bootstrap-status [repository]
   strellis curate <patch-file> [repository]
   strellis sync [repository]
   strellis audit [repository]
   strellis status [repository]
+  strellis structure [repository] [--json]
+  strellis grep <pattern> [repository] [--fixed] [--ignore-case] [--in <path>] [--json]
+  strellis symbols <file> [repository] [--json]
+  strellis trace <symbol> [repository] [--direction incoming|outgoing|both] [--depth N] [--json]
   strellis mcp [repository]
   strellis version
   strellis help
 
 Lifecycle:
   init       Create versioned project metadata and an empty curated graph.
-  bootstrap  Inventory the complete repository and create the first review queue.
+  bootstrap  Freeze the repository and start or resume full Agent-driven AI review.
+  bootstrap-preview  Show the source-disclosure manifest without returning source.
+  bootstrap-status  Show full-review coverage and current bootstrap stage.
   curate     Apply an explicit, validated graph patch.
   sync       Record repository deltas without rewriting approved meaning.
   audit      Verify graph integrity, provenance, and source coverage.
   status     Show the current repository and review state.
+  structure  Build or incrementally refresh disposable structural contributions.
+  grep       Search indexed source and group hits by the innermost symbol.
+  symbols    List symbols extracted from one source file.
+  trace      Walk resolved structural references around a symbol.
   mcp        Serve SemanticTrellis tools and resources over stdio.
 `;
 
@@ -53,6 +70,40 @@ function rootFrom(argument: string | undefined): string {
 
 function formatIssue(issue: AuditIssue): string {
   return `${issue.severity.toUpperCase()} ${issue.code} [${issue.subject}] ${issue.message}`;
+}
+
+interface ParsedArguments {
+  positionals: string[];
+  flags: Set<string>;
+  options: Map<string, string>;
+}
+
+function parseArguments(values: string[], valueOptions: Set<string> = new Set()): ParsedArguments {
+  const positionals: string[] = [];
+  const flags = new Set<string>();
+  const options = new Map<string, string>();
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === undefined) continue;
+    if (valueOptions.has(value)) {
+      const optionValue = values[index + 1];
+      if (optionValue === undefined) throw new Error(`${value} requires a value.`);
+      options.set(value, optionValue);
+      index += 1;
+    } else if (value.startsWith("-")) {
+      flags.add(value);
+    } else {
+      positionals.push(value);
+    }
+  }
+  return { positionals, flags, options };
+}
+
+function positiveInteger(value: string | undefined, fallback: number, option: string): number {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) throw new Error(`${option} must be a non-negative integer.`);
+  return parsed;
 }
 
 export async function runCli(args: string[], io: CliIo = consoleIo): Promise<number> {
@@ -78,9 +129,35 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
         return 0;
       }
       case "bootstrap": {
-        const result = await bootstrapProject(rootFrom(rest[0]));
-        io.out(`Bootstrapped ${result.files} files.`);
-        io.out(`Created ${result.reviewItems} review items.`);
+        const parsed = parseArguments(rest, new Set(["--max-chunk-characters"]));
+        const result = await startAgentBootstrap(rootFrom(parsed.positionals[0]), {
+          sourceDisclosureApproved: parsed.flags.has("--allow-source-disclosure"),
+          maxChunkCharacters: positiveInteger(
+            parsed.options.get("--max-chunk-characters"),
+            12_000,
+            "--max-chunk-characters",
+          ),
+        });
+        io.out(
+          `AI bootstrap ${result.status.sessionId}: ${result.status.stage}, ` +
+            `${result.status.summarizedChunks}/${result.status.totalChunks} chunks, ` +
+            `${result.status.summarizedFiles}/${result.status.totalFiles} files.`,
+        );
+        if (!result.status.sourceDisclosureApproved) {
+          io.out(
+            "Source disclosure is not approved. Re-run with --allow-source-disclosure after explicit user approval.",
+          );
+        }
+        return 0;
+      }
+      case "bootstrap-preview": {
+        const result = await previewAgentBootstrap(rootFrom(rest[0]));
+        io.out(JSON.stringify(result, null, 2));
+        return 0;
+      }
+      case "bootstrap-status": {
+        const result = await getAgentBootstrapStatus(rootFrom(rest[0]));
+        io.out(JSON.stringify(result, null, 2));
         return 0;
       }
       case "sync": {
@@ -119,15 +196,113 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
       case "status": {
         const result = await projectStatus(rootFrom(rest[0]));
         io.out(`Project: ${result.projectId}`);
-        io.out(`Bootstrapped: ${result.bootstrapped ? "yes" : "no"}`);
+        io.out(`Inventory snapshot: ${result.bootstrapped ? "yes" : "no"}`);
+        io.out(`AI bootstrap: ${result.aiBootstrapStage ?? "not started"}`);
         io.out(`Files: ${result.files}`);
         io.out(`Curated graph: ${result.nodes} nodes, ${result.edges} edges`);
         io.out(`Pending reviews: ${result.pendingReviews}`);
         return 0;
       }
-      case "mcp":
+      case "structure": {
+        const parsed = parseArguments(rest);
+        const result = await buildStructuralIndex(rootFrom(parsed.positionals[0]));
+        if (parsed.flags.has("--json")) {
+          io.out(JSON.stringify(result.metrics, null, 2));
+        } else {
+          io.out(
+            `Structure: ${result.metrics.symbols} symbols, ${result.metrics.references} references, ` +
+              `${result.metrics.edges} resolved edges, ${result.metrics.diagnostics} parse diagnostics ` +
+              `in ${result.metrics.diagnosticFiles} files.`,
+          );
+          io.out(
+            `Files: ${result.metrics.parsedFiles} parsed, ${result.metrics.reusedFiles} reused, ` +
+              `${result.metrics.removedFiles} removed (${result.metrics.durationMs} ms).`,
+          );
+        }
+        return 0;
+      }
+      case "grep": {
+        const parsed = parseArguments(rest, new Set(["--in", "--limit"]));
+        const pattern = parsed.positionals[0];
+        if (pattern === undefined) throw new Error("grep requires a pattern.");
+        const result = await grepStructure(rootFrom(parsed.positionals[1]), pattern, {
+          fixed: parsed.flags.has("--fixed"),
+          ignoreCase: parsed.flags.has("--ignore-case") || parsed.flags.has("-i"),
+          ...(parsed.options.has("--in")
+            ? { pathPrefix: parsed.options.get("--in") as string }
+            : {}),
+          limit: positiveInteger(parsed.options.get("--limit"), 2_000, "--limit"),
+          refresh: !parsed.flags.has("--no-refresh"),
+        });
+        if (parsed.flags.has("--json")) {
+          io.out(JSON.stringify(result, null, 2));
+        } else {
+          io.out(
+            `${JSON.stringify(pattern)}: ${result.totalHits} hits in ${result.groups.length} symbols ` +
+              `across ${result.filesSearched} files.`,
+          );
+          for (const group of result.groups) {
+            io.out(
+              `${group.symbolName} · ${group.symbolKind} · ${group.path} · ` +
+                `${group.inDegree} incoming edges`,
+            );
+            for (const hit of group.hits) io.out(`  L${hit.line} ${hit.text}`);
+          }
+        }
+        return 0;
+      }
+      case "symbols": {
+        const parsed = parseArguments(rest);
+        const file = parsed.positionals[0];
+        if (file === undefined) throw new Error("symbols requires a file path or unique basename.");
+        const result = await getFileSymbols(
+          rootFrom(parsed.positionals[1]),
+          file,
+          !parsed.flags.has("--no-refresh"),
+        );
+        if (parsed.flags.has("--json")) {
+          io.out(JSON.stringify(result, null, 2));
+        } else {
+          for (const symbol of result.symbols) {
+            io.out(
+              `${symbol.qualifiedName} · ${symbol.kind} · ` +
+                `L${symbol.span.startLine}-L${symbol.span.endLine} · ${symbol.signature}`,
+            );
+          }
+        }
+        return 0;
+      }
+      case "trace": {
+        const parsed = parseArguments(rest, new Set(["--direction", "--depth"]));
+        const query = parsed.positionals[0];
+        if (query === undefined) throw new Error("trace requires a symbol ID or name.");
+        const direction = parsed.options.get("--direction") ?? "incoming";
+        if (!new Set(["incoming", "outgoing", "both"]).has(direction)) {
+          throw new Error("--direction must be incoming, outgoing, or both.");
+        }
+        const result = await traceProjectStructure(
+          rootFrom(parsed.positionals[1]),
+          query,
+          direction as "incoming" | "outgoing" | "both",
+          positiveInteger(parsed.options.get("--depth"), 1, "--depth"),
+          !parsed.flags.has("--no-refresh"),
+        );
+        if (parsed.flags.has("--json")) {
+          io.out(JSON.stringify(result, null, 2));
+        } else {
+          io.out(
+            `Trace ${JSON.stringify(query)}: ${result.trace.symbols.length} symbols, ` +
+              `${result.trace.edges.length} edges${result.trace.ambiguous ? " (ambiguous focus)" : ""}.`,
+          );
+          for (const edge of result.trace.edges) io.out(`${edge.from} -${edge.kind}-> ${edge.to}`);
+        }
+        return 0;
+      }
+      case "mcp": {
+        const { serveSemanticTrellisStdio } = await import("../mcp/stdio.js");
         serveSemanticTrellisStdio(rootFrom(rest[0]));
         return 0;
+      }
       default:
         io.error(`Unknown command: ${command}`);
         io.error("Run `strellis help` for usage.");

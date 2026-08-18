@@ -177,9 +177,21 @@ function parseOperation(value: unknown, context: string): GraphPatchOperation {
   const op = string(input.op, `${context}.op`);
   switch (op) {
     case "upsert-node":
-      return { op, node: parseNode(input.node, `${context}.node`) };
+      return {
+        op,
+        node: parseNode(input.node, `${context}.node`),
+        ...(input.overrideLocked === undefined
+          ? {}
+          : { overrideLocked: boolean(input.overrideLocked, `${context}.overrideLocked`) }),
+      };
     case "remove-node":
-      return { op, nodeId: string(input.nodeId, `${context}.nodeId`) };
+      return {
+        op,
+        nodeId: string(input.nodeId, `${context}.nodeId`),
+        ...(input.overrideLocked === undefined
+          ? {}
+          : { overrideLocked: boolean(input.overrideLocked, `${context}.overrideLocked`) }),
+      };
     case "upsert-edge":
       return { op, edge: parseEdge(input.edge, `${context}.edge`) };
     case "remove-edge":

@@ -39,12 +39,33 @@ optimization and can be rebuilt.
 Pending bootstrap and maintenance work. It records which files changed, why
 they require review, and which curated nodes may be affected.
 
+### `.semantic-trellis/local/structural-index.json`
+
+Disposable per-file structural contributions and their resolved edges. Each
+contribution is keyed by repository-relative path, source hash, language, and
+extractor version and contains symbols, unresolved references, and parser
+diagnostics. An unchanged file reuses its contribution without parsing. The
+current structural cache schema is version 2; older local indexes are discarded
+and rebuilt.
+
+### `.semantic-trellis/local/agent-bootstrap.json`
+
+The resumable Agent AI-review session: frozen snapshot digest, disclosure
+approval, stable chunk units, chunk summaries, file summaries, reuse counters,
+coverage, and the completed curated-graph digest. Source text is never stored in
+this file; it is reread from the frozen hash when an approved Agent asks for a
+batch.
+
 Local files are ignored by Git and are never authoritative.
 
 ## Stable identity
 
 Node IDs are explicit opaque strings chosen at curation time. Display names,
 file paths, and symbol names may change without changing node identity.
+
+A locked node cannot be modified or removed by an ordinary patch. An explicit
+reviewed operation must set `overrideLocked: true`; this intent is visible in
+the patch and still passes through the validation-token workflow.
 
 Edge IDs are explicit and stable so reviews can update an edge without relying
 on array position.

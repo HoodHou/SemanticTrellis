@@ -23,6 +23,8 @@ Before changing architecture or storage behavior, read:
   instance to one fixed repository root.
 - `src/ports/` defines provider-facing interfaces; provider SDKs must not leak
   into the domain model.
+- `src/adapters/` contains language and provider implementations behind ports.
+- `src/structural/` owns language-neutral contribution resolution and queries.
 
 ## Product invariants
 
@@ -34,6 +36,10 @@ Before changing architecture or storage behavior, read:
 - Patch application must validate graph referential integrity before writing.
 - MCP graph writes must use the validate-token-apply workflow; no direct write
   tool may bypass it.
+- MCP bootstrap must preview the disclosure manifest and obtain explicit user
+  approval before returning repository source chunks.
+- A bootstrap cannot be marked complete until chunk and file coverage are 100%
+  and the curated graph audit is clean.
 - Every node must be able to cite repository-relative source paths.
 - New storage formats require a schema version and an ADR.
 

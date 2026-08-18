@@ -170,12 +170,28 @@ export function applyGraphPatch(graph: CuratedGraph, patch: GraphPatch): PatchRe
 
   for (const operation of patch.operations) {
     switch (operation.op) {
-      case "upsert-node":
+      case "upsert-node": {
+        const existing = nodes.get(operation.node.id);
+        const changesLockedNode = existing?.locked === true &&
+          JSON.stringify(existing) !== JSON.stringify(operation.node);
+        if (changesLockedNode && operation.overrideLocked !== true) {
+          throw new Error(
+            `Graph patch rejected: locked-node-modification: ${operation.node.id} requires overrideLocked=true.`,
+          );
+        }
         nodes.set(operation.node.id, structuredClone(operation.node));
         break;
-      case "remove-node":
+      }
+      case "remove-node": {
+        const existing = nodes.get(operation.nodeId);
+        if (existing?.locked === true && operation.overrideLocked !== true) {
+          throw new Error(
+            `Graph patch rejected: locked-node-removal: ${operation.nodeId} requires overrideLocked=true.`,
+          );
+        }
         nodes.delete(operation.nodeId);
         break;
+      }
       case "upsert-edge":
         edges.set(operation.edge.id, structuredClone(operation.edge));
         break;

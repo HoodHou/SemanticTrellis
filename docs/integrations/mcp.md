@@ -23,12 +23,25 @@ for protocol messages; diagnostics are written to standard error.
 
 | Tool | Effect |
 |---|---|
+| `semantic_trellis_bootstrap_preview` | Preview the source disclosure set without source content |
+| `semantic_trellis_bootstrap_start` | Freeze or resume the approved full AI review |
+| `semantic_trellis_bootstrap_status` | Read chunk/file coverage and reuse metrics |
+| `semantic_trellis_bootstrap_next_batch` | Read the next frozen source chunks |
+| `semantic_trellis_bootstrap_submit_chunk_summaries` | Checkpoint Agent chunk summaries |
+| `semantic_trellis_bootstrap_next_rollups` | Read completed chunk summaries plus structural evidence |
+| `semantic_trellis_bootstrap_submit_file_summaries` | Checkpoint Agent file-level rollups |
+| `semantic_trellis_bootstrap_context` | Page complete file summaries for curation |
+| `semantic_trellis_bootstrap_complete` | Complete only after clean graph application |
 | `semantic_trellis_status` | Read project, graph, file, and review counts |
 | `semantic_trellis_graph` | Read the complete graph or a directional neighborhood |
 | `semantic_trellis_search` | Search curated nodes and source provenance |
 | `semantic_trellis_review_queue` | Read pending semantic review work |
 | `semantic_trellis_audit` | Read integrity, provenance, and coverage findings |
 | `semantic_trellis_sync` | Update disposable snapshot state and review queue |
+| `semantic_trellis_structure` | Incrementally refresh symbols, references, and edges |
+| `semantic_trellis_grep` | Search indexed source and group hits by symbol and curated node |
+| `semantic_trellis_file_symbols` | Read every extracted symbol in one file |
+| `semantic_trellis_trace` | Trace resolved incoming or outgoing structural edges |
 | `semantic_trellis_validate_patch` | Validate a patch without writing |
 | `semantic_trellis_apply_patch` | Apply the exact validated patch to the canonical graph |
 
@@ -43,14 +56,20 @@ for protocol messages; diagnostics are written to standard error.
 Agents must never call `semantic_trellis_apply_patch` directly.
 
 1. Read status and pending review work.
-2. Read or search the relevant curated neighborhood.
-3. Build a small graph patch with source evidence.
-4. Call `semantic_trellis_validate_patch`.
-5. Present the proposed change to the user and obtain approval.
-6. Call `semantic_trellis_apply_patch` with the unchanged patch and validation
+2. Run `semantic_trellis_structure` after source changes.
+3. Read or search the relevant curated or structural neighborhood.
+4. Build a small graph patch with source evidence.
+5. Call `semantic_trellis_validate_patch`.
+6. Present the proposed change to the user and obtain approval.
+7. Call `semantic_trellis_apply_patch` with the unchanged patch and validation
    token.
 
 The server rejects the write if the graph or patch changed after validation.
+
+The first full review has an earlier consent boundary: call
+`semantic_trellis_bootstrap_preview`, show its manifest to the user, and call
+`semantic_trellis_bootstrap_start` only after explicit source-disclosure
+approval. Full workflow details are in `docs/ai-bootstrap.md`.
 
 ## Codex project configuration
 

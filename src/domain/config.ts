@@ -43,6 +43,7 @@ const DEFAULT_EXCLUDED_DIRECTORIES = [
   "build",
   "coverage",
   "dist",
+  "graft",
   "node_modules",
   "obj",
   "out",

@@ -47,8 +47,16 @@ export const semanticEdgeSchema = z.object({
 });
 
 const patchOperationSchema = z.discriminatedUnion("op", [
-  z.object({ op: z.literal("upsert-node"), node: semanticNodeSchema }),
-  z.object({ op: z.literal("remove-node"), nodeId: z.string().min(1) }),
+  z.object({
+    op: z.literal("upsert-node"),
+    node: semanticNodeSchema,
+    overrideLocked: z.boolean().optional(),
+  }),
+  z.object({
+    op: z.literal("remove-node"),
+    nodeId: z.string().min(1),
+    overrideLocked: z.boolean().optional(),
+  }),
   z.object({ op: z.literal("upsert-edge"), edge: semanticEdgeSchema }),
   z.object({ op: z.literal("remove-edge"), edgeId: z.string().min(1) }),
   z.object({ op: z.literal("mark-reviewed"), paths: z.array(z.string().min(1)).min(1) }),
@@ -66,6 +74,13 @@ export function asGraphPatch(value: z.infer<typeof graphPatchSchema>): GraphPatc
 export const statusOutputSchema = z.object({
   projectId: z.string(),
   bootstrapped: z.boolean(),
+  aiBootstrapped: z.boolean(),
+  aiBootstrapStage: z.enum([
+    "summarize-chunks",
+    "summarize-files",
+    "ready-for-curation",
+    "complete",
+  ]).nullable(),
   files: z.number().int().nonnegative(),
   nodes: z.number().int().nonnegative(),
   edges: z.number().int().nonnegative(),
@@ -156,4 +171,183 @@ export const applyOutputSchema = z.object({
   edges: z.number().int().nonnegative(),
   reviewedPaths: z.number().int().nonnegative(),
   pendingReviews: z.number().int().nonnegative(),
+});
+
+export const sourceSpanSchema = z.object({
+  startLine: z.number().int().positive(),
+  startColumn: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  endColumn: z.number().int().positive(),
+});
+
+export const structuralSymbolSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  name: z.string(),
+  qualifiedName: z.string(),
+  kind: z.enum([
+    "file",
+    "module",
+    "class",
+    "interface",
+    "struct",
+    "record",
+    "type",
+    "enum",
+    "delegate",
+    "function",
+    "method",
+    "constructor",
+    "destructor",
+    "operator",
+    "property",
+    "field",
+    "event",
+    "variable",
+  ]),
+  span: sourceSpanSchema,
+  signature: z.string(),
+  parentId: z.string().nullable(),
+});
+
+export const structuralEdgeSchema = z.object({
+  id: z.string(),
+  from: z.string(),
+  to: z.string(),
+  kind: z.enum(["call", "construct", "import", "extends", "implements"]),
+  referenceId: z.string(),
+});
+
+export const structuralBuildMetricsSchema = z.object({
+  discoveryMode: z.enum(["git", "filesystem"]),
+  filesDiscovered: z.number().int().nonnegative(),
+  filesSupported: z.number().int().nonnegative(),
+  parsedFiles: z.number().int().nonnegative(),
+  reusedFiles: z.number().int().nonnegative(),
+  removedFiles: z.number().int().nonnegative(),
+  symbols: z.number().int().nonnegative(),
+  references: z.number().int().nonnegative(),
+  diagnostics: z.number().int().nonnegative(),
+  diagnosticFiles: z.number().int().nonnegative(),
+  edges: z.number().int().nonnegative(),
+  durationMs: z.number().nonnegative(),
+});
+
+export const structuralGrepHitSchema = z.object({
+  line: z.number().int().positive(),
+  text: z.string(),
+});
+
+export const structuralGrepOutputSchema = z.object({
+  pattern: z.string(),
+  filesSearched: z.number().int().nonnegative(),
+  totalHits: z.number().int().nonnegative(),
+  groups: z.array(
+    z.object({
+      path: z.string(),
+      symbolId: z.string(),
+      symbolName: z.string(),
+      symbolKind: structuralSymbolSchema.shape.kind,
+      inDegree: z.number().int().nonnegative(),
+      curatedNodeIds: z.array(z.string()),
+      hits: z.array(structuralGrepHitSchema),
+    }),
+  ),
+  truncatedHits: z.number().int().nonnegative(),
+  symbolAttributionRate: z.number().min(0).max(1),
+  curatedAttributionRate: z.number().min(0).max(1),
+  queryDurationMs: z.number().nonnegative(),
+});
+
+export const fileSymbolsOutputSchema = z.object({
+  file: z.string(),
+  symbols: z.array(structuralSymbolSchema),
+  build: structuralBuildMetricsSchema,
+});
+
+export const structuralTraceOutputSchema = z.object({
+  trace: z.object({
+    query: z.string(),
+    direction: z.enum(["incoming", "outgoing", "both"]),
+    depth: z.number().int().nonnegative(),
+    focus: z.array(structuralSymbolSchema),
+    symbols: z.array(structuralSymbolSchema),
+    edges: z.array(structuralEdgeSchema),
+    ambiguous: z.boolean(),
+  }),
+  build: structuralBuildMetricsSchema,
+});
+
+export const agentBootstrapStatusSchema = z.object({
+  sessionId: z.string().length(64),
+  snapshotDigest: z.string().length(64),
+  stage: z.enum(["summarize-chunks", "summarize-files", "ready-for-curation", "complete"]),
+  sourceDisclosureApproved: z.boolean(),
+  totalFiles: z.number().int().nonnegative(),
+  totalChunks: z.number().int().nonnegative(),
+  summarizedChunks: z.number().int().nonnegative(),
+  summarizedFiles: z.number().int().nonnegative(),
+  totalCharacters: z.number().int().nonnegative(),
+  summarizedCharacters: z.number().int().nonnegative(),
+  chunkCoverage: z.number().min(0).max(1),
+  fileCoverage: z.number().min(0).max(1),
+  reusedChunkSummaries: z.number().int().nonnegative(),
+  reusedFileSummaries: z.number().int().nonnegative(),
+  completedGraphDigest: z.string().length(64).nullable(),
+});
+
+export const agentBootstrapStartOutputSchema = z.object({
+  status: agentBootstrapStatusSchema,
+  structural: z.object({
+    parsedFiles: z.number().int().nonnegative(),
+    reusedFiles: z.number().int().nonnegative(),
+    symbols: z.number().int().nonnegative(),
+    references: z.number().int().nonnegative(),
+    diagnostics: z.number().int().nonnegative(),
+    diagnosticFiles: z.number().int().nonnegative(),
+    edges: z.number().int().nonnegative(),
+  }),
+});
+
+export const agentBootstrapPreviewOutputSchema = z.object({
+  discoveryMode: z.enum(["git", "filesystem"]),
+  totalFiles: z.number().int().nonnegative(),
+  totalBytes: z.number().int().nonnegative(),
+  extensions: z.record(z.string(), z.number().int().nonnegative()),
+  suspiciousPaths: z.array(z.string()),
+  largestFiles: z.array(z.object({ path: z.string(), size: z.number().int().nonnegative() })),
+});
+
+export const chunkSummarySubmissionSchema = z.object({
+  unitId: z.string().length(64),
+  summary: z.string().min(1),
+  keyFacts: z.array(z.string()),
+  risks: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  producer: z.string().min(1),
+  model: z.string().nullable(),
+});
+
+export const fileSemanticSummarySchema = z.object({
+  path: z.string().min(1),
+  hash: z.string().length(64),
+  summary: z.string().min(1),
+  responsibilities: z.array(z.string()),
+  keySymbols: z.array(z.string()),
+  dependencies: z.array(z.string()),
+  inputs: z.array(z.string()),
+  outputs: z.array(z.string()),
+  sideEffects: z.array(z.string()),
+  risks: z.array(z.string()),
+  concepts: z.array(z.string()),
+  evidence: z.array(
+    z.object({
+      startLine: z.number().int().positive(),
+      endLine: z.number().int().positive(),
+      description: z.string().min(1),
+    }),
+  ),
+  confidence: z.number().min(0).max(1),
+  producer: z.string().min(1),
+  model: z.string().nullable(),
 });

@@ -4,8 +4,21 @@ import * as z from "zod/v4";
 import {
   applyValidatedCurationPatch,
   auditProject,
+  buildStructuralIndex,
+  finishAgentBootstrap,
+  getAgentBootstrapStatus,
+  getBootstrapCurationContext,
+  getFileSymbols,
+  getNextBootstrapRollups,
+  getNextBootstrapSourceBatch,
+  grepStructure,
+  previewAgentBootstrap,
   projectStatus,
+  startAgentBootstrap,
+  submitBootstrapChunkSummaries,
+  submitBootstrapFileSummaries,
   syncProject,
+  traceProjectStructure,
   validateCurationPatch,
 } from "../application/index.js";
 import { graphNeighborhood, searchGraph } from "../domain/query.js";
@@ -13,19 +26,28 @@ import { loadGraph, loadReviewQueue } from "../infrastructure/project-store.js";
 import { VERSION } from "../version.js";
 import {
   applyOutputSchema,
+  agentBootstrapStartOutputSchema,
+  agentBootstrapPreviewOutputSchema,
+  agentBootstrapStatusSchema,
   asGraphPatch,
   auditOutputSchema,
+  chunkSummarySubmissionSchema,
+  fileSymbolsOutputSchema,
+  fileSemanticSummarySchema,
   graphOutputSchema,
   graphPatchSchema,
   reviewQueueOutputSchema,
   searchOutputSchema,
   statusOutputSchema,
+  structuralBuildMetricsSchema,
+  structuralGrepOutputSchema,
+  structuralTraceOutputSchema,
   syncOutputSchema,
   validationOutputSchema,
 } from "./schemas.js";
 
 const INSTRUCTIONS =
-  "SemanticTrellis serves one fixed repository. Start with semantic_trellis_status, then use graph or search for curated context. Run sync before reasoning about recent edits. Never call apply_patch directly: validate the exact patch, present the planned canonical changes to the user, obtain approval, then apply it with the returned validation token. Sync changes only disposable local state; apply_patch changes the versioned curated graph.";
+  "SemanticTrellis serves one fixed repository. For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.";
 
 function success<T extends Record<string, unknown>>(value: T) {
   return {
@@ -56,6 +78,16 @@ async function safe<T extends Record<string, unknown>>(
   }
 }
 
+async function safeText(action: () => Promise<unknown>) {
+  try {
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(await action(), null, 2) }],
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServer {
   const root = resolve(repositoryRoot);
   const server = new McpServer(
@@ -65,6 +97,194 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
       websiteUrl: "https://github.com/HoodHou/SemanticTrellis",
     },
     { instructions: INSTRUCTIONS },
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_preview",
+    {
+      title: "Preview AI Bootstrap Disclosure",
+      description:
+        "List the files, bytes, extension counts, largest files, and suspicious paths that would be disclosed for full AI review. Returns no source content and changes nothing.",
+      inputSchema: z.object({}),
+      outputSchema: agentBootstrapPreviewOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => safe(async () => ({ ...(await previewAgentBootstrap(root)) })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_start",
+    {
+      title: "Start or Resume Full AI Bootstrap",
+      description:
+        "Freeze the current repository snapshot, refresh structural evidence, plan source chunks, and resume summaries for unchanged content. Requires explicit approval to disclose source chunks to the connected Agent model.",
+      inputSchema: z.object({
+        sourceDisclosureApproved: z.literal(true).describe(
+          "Must be true only after the user explicitly authorizes sending eligible repository text to the connected Agent model.",
+        ),
+        maxChunkCharacters: z.number().int().min(2_000).max(50_000).default(12_000),
+      }),
+      outputSchema: agentBootstrapStartOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ sourceDisclosureApproved, maxChunkCharacters }) =>
+      safe(async () => ({
+        ...(await startAgentBootstrap(root, {
+          sourceDisclosureApproved,
+          maxChunkCharacters,
+        })),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_status",
+    {
+      title: "Read AI Bootstrap Status",
+      description:
+        "Return full-review coverage, resumability metrics, current bootstrap stage, and completion digest.",
+      inputSchema: z.object({}),
+      outputSchema: agentBootstrapStatusSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => safe(async () => ({ ...(await getAgentBootstrapStatus(root)) })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_next_batch",
+    {
+      title: "Read Next Source Review Batch",
+      description:
+        "Return the next unsummarized frozen source chunks for AI review. Source content is returned only when bootstrap_start recorded explicit disclosure approval.",
+      inputSchema: z.object({
+        maxCharacters: z.number().int().min(1_000).max(200_000).default(48_000),
+        maxUnits: z.number().int().min(1).max(50).default(12),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ maxCharacters, maxUnits }) =>
+      safeText(() => getNextBootstrapSourceBatch(root, maxCharacters, maxUnits)),
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_submit_chunk_summaries",
+    {
+      title: "Submit AI Chunk Summaries",
+      description:
+        "Checkpoint AI summaries for exact frozen source chunks. Repeating the same submission is idempotent.",
+      inputSchema: z.object({
+        sessionId: z.string().length(64),
+        summaries: z.array(chunkSummarySubmissionSchema).min(1).max(50),
+      }),
+      outputSchema: agentBootstrapStatusSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ sessionId, summaries }) =>
+      safe(async () => ({
+        ...(await submitBootstrapChunkSummaries(root, sessionId, summaries)),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_next_rollups",
+    {
+      title: "Read Next File Rollup Batch",
+      description:
+        "Return files whose chunks are fully summarized, together with chunk summaries and structural symbols, for AI file-level synthesis.",
+      inputSchema: z.object({ limit: z.number().int().min(1).max(25).default(5) }),
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ limit }) => safeText(() => getNextBootstrapRollups(root, limit)),
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_submit_file_summaries",
+    {
+      title: "Submit AI File Summaries",
+      description:
+        "Checkpoint file-level semantic summaries after every chunk for each file has been reviewed.",
+      inputSchema: z.object({
+        sessionId: z.string().length(64),
+        summaries: z.array(fileSemanticSummarySchema).min(1).max(25),
+      }),
+      outputSchema: agentBootstrapStatusSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ sessionId, summaries }) =>
+      safe(async () => ({
+        ...(await submitBootstrapFileSummaries(root, sessionId, summaries)),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_context",
+    {
+      title: "Read AI Curation Context",
+      description:
+        "Page through completed file summaries so the Curator Agent can classify systems and propose a sourced graph patch.",
+      inputSchema: z.object({
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(100).default(20),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ offset, limit }) => safeText(() => getBootstrapCurationContext(root, offset, limit)),
+  );
+
+  server.registerTool(
+    "semantic_trellis_bootstrap_complete",
+    {
+      title: "Complete AI Bootstrap",
+      description:
+        "Mark bootstrap complete only after every file is summarized and an audit-clean curated graph with the supplied digest has been applied.",
+      inputSchema: z.object({
+        sessionId: z.string().length(64),
+        graphDigest: z.string().length(64),
+      }),
+      outputSchema: agentBootstrapStatusSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ sessionId, graphDigest }) =>
+      safe(async () => ({ ...(await finishAgentBootstrap(root, sessionId, graphDigest)) })),
   );
 
   server.registerTool(
@@ -212,6 +432,97 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
       },
     },
     async () => safe(async () => ({ ...(await syncProject(root)) })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_structure",
+    {
+      title: "Refresh Structural Contributions",
+      description:
+        "Build or incrementally refresh disposable per-file symbols, references, and resolved structural edges for the fixed repository.",
+      inputSchema: z.object({}),
+      outputSchema: structuralBuildMetricsSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => safe(async () => ({ ...(await buildStructuralIndex(root)).metrics })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_grep",
+    {
+      title: "Symbol-Aware Structural Grep",
+      description:
+        "Search the existing structural index exhaustively, group matches by innermost symbol, and attach curated semantic node IDs. Call structure first after source changes.",
+      inputSchema: z.object({
+        pattern: z.string().min(1),
+        fixed: z.boolean().default(false),
+        ignoreCase: z.boolean().default(false),
+        pathPrefix: z.string().optional(),
+        limit: z.number().int().min(1).max(5_000).default(2_000),
+      }),
+      outputSchema: structuralGrepOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ pattern, fixed, ignoreCase, pathPrefix, limit }) =>
+      safe(async () => ({
+        ...(await grepStructure(root, pattern, {
+          fixed,
+          ignoreCase,
+          ...(pathPrefix === undefined ? {} : { pathPrefix }),
+          limit,
+          refresh: false,
+        })),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_file_symbols",
+    {
+      title: "Read File Symbols",
+      description:
+        "Return every symbol and source span extracted from one exact repository path or unique basename. Call structure first after source changes.",
+      inputSchema: z.object({ file: z.string().min(1) }),
+      outputSchema: fileSymbolsOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ file }) => safe(async () => ({ ...(await getFileSymbols(root, file, false)) })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_trace",
+    {
+      title: "Trace Structural References",
+      description:
+        "Trace resolved incoming callers, outgoing dependencies, or both around a symbol ID, qualified name, or exact bare name. Call structure first after source changes.",
+      inputSchema: z.object({
+        query: z.string().min(1),
+        direction: z.enum(["incoming", "outgoing", "both"]).default("incoming"),
+        depth: z.number().int().min(0).max(8).default(1),
+      }),
+      outputSchema: structuralTraceOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ query, direction, depth }) =>
+      safe(async () => ({
+        ...(await traceProjectStructure(root, query, direction, depth, false)),
+      })),
   );
 
   server.registerTool(

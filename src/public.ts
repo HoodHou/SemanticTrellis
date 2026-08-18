@@ -1,10 +1,13 @@
 export * from "./application/index.js";
 export * from "./domain/config.js";
+export * from "./domain/agent-bootstrap.js";
 export * from "./domain/graph.js";
 export * from "./domain/model.js";
 export * from "./domain/query.js";
 export * from "./domain/review.js";
 export * from "./domain/snapshot.js";
+export * from "./domain/structural.js";
+export * from "./structural/queries.js";
 export type { SemanticProvider } from "./ports/semantic-provider.js";
 export { createSemanticTrellisMcpServer } from "./mcp/server.js";
 export { VERSION } from "./version.js";

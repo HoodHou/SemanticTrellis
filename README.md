@@ -30,7 +30,7 @@ SemanticTrellis treats repository understanding as a durable asset:
 
 ## Current milestone
 
-The first milestone is a working local vertical slice:
+The current implementation provides a working local vertical slice:
 
 - initialize the project metadata;
 - inventory source files with content hashes;
@@ -40,10 +40,11 @@ The first milestone is a working local vertical slice:
 - audit graph integrity and source coverage;
 - expose the workflow through the `strellis` CLI.
 - expose the curated graph and guarded maintenance workflow over MCP.
+- drive a resumable, full-repository AI review through an MCP-connected Agent.
 
-AI-driven classification, language-aware symbol extraction, MCP integration,
-and the visual curator are intentionally later milestones. Their boundaries are
-defined now so they can be added without replacing the core.
+Agent-driven AI bootstrap, TypeScript, JavaScript, and C# structural extraction,
+and MCP are available. Direct model-provider adapters, additional languages,
+and a visual curator remain later milestones.
 
 ## Quick start
 
@@ -59,7 +60,8 @@ Run the CLI from source:
 ```bash
 npm run dev -- help
 npm run dev -- init /path/to/repository
-npm run dev -- bootstrap /path/to/repository
+npm run dev -- bootstrap-preview /path/to/repository
+npm run dev -- bootstrap /path/to/repository --allow-source-disclosure
 npm run dev -- status /path/to/repository
 ```
 
@@ -74,17 +76,28 @@ node dist/cli/index.js help
 
 ```text
 strellis init [repository]
-strellis bootstrap [repository]
+strellis bootstrap-preview [repository]
+strellis bootstrap [repository] --allow-source-disclosure
+strellis bootstrap-status [repository]
 strellis curate <patch-file> [repository]
 strellis sync [repository]
 strellis audit [repository]
 strellis status [repository]
+strellis structure [repository]
+strellis grep <pattern> [repository] --fixed --in src
+strellis symbols <file> [repository]
+strellis trace <symbol> [repository] --direction incoming --depth 2
 strellis mcp [repository]
 ```
 
 The `curate` command consumes an explicit JSON patch. This is the first durable
 seam for a future curator agent: the agent proposes operations, the domain layer
 validates them, and only then does the canonical graph change.
+
+The full AI bootstrap is Agent-driven: preview the disclosure set, obtain user
+approval, review every frozen source chunk, roll those summaries up per file,
+page through the complete curation context, and apply an audit-clean graph
+patch. See [AI bootstrap](docs/ai-bootstrap.md).
 
 ## MCP for coding agents
 
@@ -100,6 +113,11 @@ The server exposes curated graph search, graph neighborhoods, status, audit,
 review queue access, incremental sync, and guarded curation. Canonical writes
 require a validation token tied to the exact patch and current graph state.
 
+The disposable structural layer uses the TypeScript Compiler API for TypeScript
+and JavaScript and the ast-grep Node API with a prebuilt Tree-sitter grammar for
+C#. Each file owns its symbols, parser diagnostics, and unresolved references;
+unchanged contributions are reused by content hash.
+
 See [MCP integration](docs/integrations/mcp.md) for Codex and generic host
 configuration.
 
@@ -107,12 +125,14 @@ configuration.
 
 ```text
 src/
+  adapters/          Compiler and future provider implementations
   application/       Use cases and workflow orchestration
   cli/               Command-line adapter
   domain/            Stable graph and change-set rules
   infrastructure/    File system, hashing, and JSON persistence
   mcp/               Agent-facing MCP tools, resources, and stdio transport
   ports/             Interfaces for future AI and parser adapters
+  structural/        Language-neutral contribution resolution and queries
 docs/
   adr/               Architecture decision records
   architecture/      System and storage design
@@ -128,6 +148,8 @@ When SemanticTrellis initializes a target repository, it creates:
   local/
     snapshot.json     Disposable repository fingerprint
     review-queue.json Pending local review work
+    structural-index.json Disposable per-file symbols and references
+    agent-bootstrap.json Resumable AI-review checkpoints and coverage
 ```
 
 Only `.semantic-trellis/local/` is ignored. The config and curated graph are
@@ -139,6 +161,7 @@ intended to be reviewed and committed.
 - [Storage model](docs/architecture/storage-model.md)
 - [Roadmap](docs/roadmap.md)
 - [MCP integration](docs/integrations/mcp.md)
+- [AI bootstrap](docs/ai-bootstrap.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Language policy

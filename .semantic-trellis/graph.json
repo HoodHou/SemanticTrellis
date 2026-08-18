@@ -3,6 +3,43 @@
   "projectId": "semantictrellis",
   "nodes": [
     {
+      "id": "agent-ai-bootstrap",
+      "name": "Agent AI Bootstrap",
+      "kind": "subsystem",
+      "summary": "Runs the consent-gated, frozen, resumable full-repository Agent review that checkpoints every source chunk and file summary before an audit-clean curated graph can be accepted, then reuses unchanged semantic checkpoints across later deltas.",
+      "sources": [
+        {
+          "path": "src/domain/agent-bootstrap.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/agent-bootstrap.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/infrastructure/agent-bootstrap-store.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/ai-bootstrap.md",
+          "role": "primary"
+        },
+        {
+          "path": "docs/adr/0007-agent-driven-ai-bootstrap.md",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "agent",
+        "ai",
+        "bootstrap",
+        "full-review",
+        "resumable"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
       "id": "application-workflows",
       "name": "Application Workflows",
       "kind": "subsystem",
@@ -206,10 +243,56 @@
       "locked": true
     },
     {
+      "id": "language-extraction-adapters",
+      "name": "Language Extraction Adapters",
+      "kind": "component",
+      "summary": "Defines the language adapter port and pinned Compiler API or Tree-sitter implementations that turn TypeScript, JavaScript, and C# files into independently cacheable structural contributions with diagnostics.",
+      "sources": [
+        {
+          "path": "src/ports/language-adapter.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/adapters/typescript/typescript-adapter.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/adapters/ast-grep-runtime.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "src/adapters/csharp/csharp-adapter.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/structural/registry.ts",
+          "role": "primary"
+        },
+        {
+          "path": "docs/adr/0005-compiler-backed-contributions.md",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0008-csharp-tree-sitter-contributions.md",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "parser",
+        "typescript",
+        "csharp",
+        "tree-sitter",
+        "adapter",
+        "structural"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
       "id": "mcp-agent-adapter",
       "name": "MCP Agent Adapter",
       "kind": "subsystem",
-      "summary": "Exposes the fixed repository's curated graph, review state, audits, delta sync, and validation-token curation workflow to MCP-compatible agents.",
+      "summary": "Exposes the fixed repository's curated graph, structural index, symbol-aware grep and trace, review state, audits, delta sync, and validation-token curation workflow to MCP-compatible agents.",
       "sources": [
         {
           "path": "src/mcp/server.ts",
@@ -322,11 +405,60 @@
       "locked": true
     },
     {
+      "id": "structural-index-engine",
+      "name": "Structural Index Engine",
+      "kind": "subsystem",
+      "summary": "Maintains per-file structural contributions, resolves references, groups source grep hits by symbol, and provides bounded structural traces.",
+      "sources": [
+        {
+          "path": "src/domain/structural.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/structural/resolver.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/structural/queries.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/infrastructure/structural-store.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/structure.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/structural-grep.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/structural-query.ts",
+          "role": "primary"
+        }
+      ],
+      "tags": [
+        "structure",
+        "symbols",
+        "grep",
+        "trace",
+        "incremental"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
       "id": "verification-suite",
       "name": "Verification Suite",
       "kind": "component",
-      "summary": "Verifies snapshot deltas, graph integrity, graph queries, the complete project lifecycle, and MCP in-memory and stdio behavior.",
+      "summary": "Verifies AI bootstrap; graph integrity; Git discovery; TypeScript and C# extraction, diagnostics and conservative resolution; structural reuse, grep and trace; the project lifecycle; and MCP in-memory and stdio behavior.",
       "sources": [
+        {
+          "path": "test/agent-bootstrap.test.ts",
+          "role": "primary"
+        },
         {
           "path": "test/snapshot.test.ts",
           "role": "primary"
@@ -350,18 +482,65 @@
         {
           "path": "test/mcp-stdio.test.ts",
           "role": "primary"
+        },
+        {
+          "path": "test/repository-scanner.test.ts",
+          "role": "primary"
+        },
+        {
+          "path": "test/structure.test.ts",
+          "role": "primary"
+        },
+        {
+          "path": "test/structural-trace.test.ts",
+          "role": "primary"
+        },
+        {
+          "path": "test/typescript-adapter.test.ts",
+          "role": "primary"
+        },
+        {
+          "path": "test/csharp-adapter.test.ts",
+          "role": "primary"
         }
       ],
       "tags": [
         "test",
         "verification",
-        "mcp"
+        "mcp",
+        "structural",
+        "csharp",
+        "ai-bootstrap"
       ],
       "status": "approved",
       "locked": false
     }
   ],
   "edges": [
+    {
+      "id": "agent-bootstrap-depends-on-infrastructure",
+      "from": "agent-ai-bootstrap",
+      "to": "repository-infrastructure",
+      "relation": "depends-on",
+      "description": "Bootstrap freezes scanned hashes and persists disposable checkpoints through repository infrastructure.",
+      "status": "approved"
+    },
+    {
+      "id": "agent-bootstrap-depends-on-structural-index",
+      "from": "agent-ai-bootstrap",
+      "to": "structural-index-engine",
+      "relation": "depends-on",
+      "description": "File rollups combine AI chunk summaries with extracted symbols and references.",
+      "status": "approved"
+    },
+    {
+      "id": "agent-bootstrap-produces-curated-domain",
+      "from": "agent-ai-bootstrap",
+      "to": "curated-graph-domain",
+      "relation": "produces",
+      "description": "The completed workflow produces a reviewed, audit-clean canonical semantic graph.",
+      "status": "approved"
+    },
     {
       "id": "application-depends-on-domain",
       "from": "application-workflows",
@@ -376,6 +555,14 @@
       "to": "repository-infrastructure",
       "relation": "depends-on",
       "description": "Application workflows load, scan, and persist repository state through infrastructure adapters.",
+      "status": "approved"
+    },
+    {
+      "id": "cli-depends-on-agent-bootstrap",
+      "from": "command-line-adapter",
+      "to": "agent-ai-bootstrap",
+      "relation": "depends-on",
+      "description": "The CLI previews, starts, resumes, and reports the full Agent bootstrap workflow.",
       "status": "approved"
     },
     {
@@ -395,11 +582,27 @@
       "status": "approved"
     },
     {
+      "id": "cli-depends-on-structural-index",
+      "from": "command-line-adapter",
+      "to": "structural-index-engine",
+      "relation": "depends-on",
+      "description": "The CLI exposes structure, grep, symbols, and trace commands.",
+      "status": "approved"
+    },
+    {
       "id": "governance-configures-product",
       "from": "architecture-governance",
       "to": "semantic-trellis-product",
       "relation": "configures",
       "description": "Architecture records and repository rules constrain product evolution.",
+      "status": "approved"
+    },
+    {
+      "id": "mcp-depends-on-agent-bootstrap",
+      "from": "mcp-agent-adapter",
+      "to": "agent-ai-bootstrap",
+      "relation": "depends-on",
+      "description": "MCP exposes the consent, review, rollup, context, and completion stages to connected Agents.",
       "status": "approved"
     },
     {
@@ -427,11 +630,27 @@
       "status": "approved"
     },
     {
+      "id": "mcp-depends-on-structural-index",
+      "from": "mcp-agent-adapter",
+      "to": "structural-index-engine",
+      "relation": "depends-on",
+      "description": "MCP exposes structural refresh, grep, file-symbol, and trace tools.",
+      "status": "approved"
+    },
+    {
       "id": "patch-contract-configures-domain",
       "from": "curation-patch-contract",
       "to": "curated-graph-domain",
       "relation": "configures",
       "description": "The patch contract defines the only reviewed mutation boundary for the canonical graph.",
+      "status": "approved"
+    },
+    {
+      "id": "product-contains-agent-ai-bootstrap",
+      "from": "semantic-trellis-product",
+      "to": "agent-ai-bootstrap",
+      "relation": "contains",
+      "description": "The product includes a complete Agent-driven first-review lifecycle.",
       "status": "approved"
     },
     {
@@ -467,6 +686,14 @@
       "status": "approved"
     },
     {
+      "id": "product-contains-language-adapters",
+      "from": "semantic-trellis-product",
+      "to": "language-extraction-adapters",
+      "relation": "contains",
+      "description": "The product owns provider-neutral language extraction adapters.",
+      "status": "approved"
+    },
+    {
       "id": "product-contains-mcp",
       "from": "semantic-trellis-product",
       "to": "mcp-agent-adapter",
@@ -483,11 +710,43 @@
       "status": "approved"
     },
     {
+      "id": "product-contains-structural-index",
+      "from": "semantic-trellis-product",
+      "to": "structural-index-engine",
+      "relation": "contains",
+      "description": "The product owns the disposable structural index and query engine.",
+      "status": "approved"
+    },
+    {
       "id": "provider-boundary-depends-on-domain",
       "from": "semantic-provider-boundary",
       "to": "curated-graph-domain",
       "relation": "depends-on",
       "description": "Provider contracts exchange domain snapshots, changes, graphs, and patches.",
+      "status": "approved"
+    },
+    {
+      "id": "structural-index-depends-on-curated-domain",
+      "from": "structural-index-engine",
+      "to": "curated-graph-domain",
+      "relation": "depends-on",
+      "description": "Structural grep attaches approved curated nodes through source provenance.",
+      "status": "approved"
+    },
+    {
+      "id": "structural-index-depends-on-infrastructure",
+      "from": "structural-index-engine",
+      "to": "repository-infrastructure",
+      "relation": "depends-on",
+      "description": "The structural engine uses Git-aware discovery, source hashing, and disposable persistence.",
+      "status": "approved"
+    },
+    {
+      "id": "structural-index-uses-language-adapters",
+      "from": "structural-index-engine",
+      "to": "language-extraction-adapters",
+      "relation": "depends-on",
+      "description": "The structural engine delegates file extraction through the language registry.",
       "status": "approved"
     },
     {
@@ -499,11 +758,27 @@
       "status": "approved"
     },
     {
+      "id": "verification-validates-agent-bootstrap",
+      "from": "verification-suite",
+      "to": "agent-ai-bootstrap",
+      "relation": "validates",
+      "description": "Tests verify disclosure consent, complete coverage, resume, reuse, source drift rejection, and graph completion.",
+      "status": "approved"
+    },
+    {
       "id": "verification-validates-product",
       "from": "verification-suite",
       "to": "semantic-trellis-product",
       "relation": "validates",
       "description": "Tests validate both pure rules and the complete application lifecycle.",
+      "status": "approved"
+    },
+    {
+      "id": "verification-validates-structural-index",
+      "from": "verification-suite",
+      "to": "structural-index-engine",
+      "relation": "validates",
+      "description": "Tests verify extraction, reuse, grep attribution, and trace behavior.",
       "status": "approved"
     }
   ]

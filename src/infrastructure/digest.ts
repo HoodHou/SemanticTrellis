@@ -18,3 +18,7 @@ export function canonicalJson(value: unknown): string {
 export function digestJson(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
+
+export function digestBytes(value: string | Uint8Array): string {
+  return createHash("sha256").update(value).digest("hex");
+}

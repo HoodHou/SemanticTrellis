@@ -99,6 +99,8 @@ describe("project workflow", () => {
     expect(status.nodes).toBe(2);
     expect(status.edges).toBe(1);
     expect(status.pendingReviews).toBe(0);
+    expect(status.aiBootstrapped).toBe(false);
+    expect(status.aiBootstrapStage).toBeNull();
 
     const audit = await auditProject(root);
     expect(audit.errors).toBe(0);

@@ -3,6 +3,37 @@ import { applyGraphPatch, auditGraph, createEmptyGraph } from "../src/domain/gra
 import { SCHEMA_VERSION, type CuratedGraph, type GraphPatch } from "../src/domain/model.js";
 
 describe("curated graph", () => {
+  it("requires an explicit override to modify an existing locked node", () => {
+    const graph = createEmptyGraph("example");
+    graph.nodes.push({
+      id: "locked",
+      name: "Locked Node",
+      kind: "system",
+      summary: "Original summary.",
+      sources: [],
+      tags: [],
+      status: "approved",
+      locked: true,
+    });
+    const replacement = {
+      ...graph.nodes[0]!,
+      summary: "Reviewed replacement summary.",
+    };
+
+    expect(() =>
+      applyGraphPatch(graph, {
+        schemaVersion: SCHEMA_VERSION,
+        operations: [{ op: "upsert-node", node: replacement }],
+      }),
+    ).toThrow(/locked-node-modification/);
+
+    const applied = applyGraphPatch(graph, {
+      schemaVersion: SCHEMA_VERSION,
+      operations: [{ op: "upsert-node", node: replacement, overrideLocked: true }],
+    });
+    expect(applied.graph.nodes[0]?.summary).toBe("Reviewed replacement summary.");
+  });
+
   it("rejects a patch that leaves a dangling edge", () => {
     const graph = createEmptyGraph("example");
     const patch: GraphPatch = {

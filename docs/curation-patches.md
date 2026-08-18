@@ -22,10 +22,15 @@ See `examples/curation-patch.example.json` for a minimal patch.
 
 Create or replace a semantic node by stable ID.
 
+Replacing an existing locked node requires `overrideLocked: true` on the
+operation. New locked nodes do not require an override.
+
 ### `remove-node`
 
 Remove a semantic node. The transaction is rejected if any resulting edge is
 dangling, so incident edges must also be removed in the same patch.
+
+Removing a locked node also requires `overrideLocked: true`.
 
 ### `upsert-edge`
 

@@ -118,11 +118,13 @@ export interface ReviewQueue {
 export interface UpsertNodeOperation {
   op: "upsert-node";
   node: SemanticNode;
+  overrideLocked?: boolean | undefined;
 }
 
 export interface RemoveNodeOperation {
   op: "remove-node";
   nodeId: string;
+  overrideLocked?: boolean | undefined;
 }
 
 export interface UpsertEdgeOperation {

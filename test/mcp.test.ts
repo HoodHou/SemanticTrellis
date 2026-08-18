@@ -41,6 +41,19 @@ describe("MCP server", () => {
           "semantic_trellis_review_queue",
           "semantic_trellis_audit",
           "semantic_trellis_sync",
+          "semantic_trellis_structure",
+          "semantic_trellis_grep",
+          "semantic_trellis_file_symbols",
+          "semantic_trellis_trace",
+          "semantic_trellis_bootstrap_preview",
+          "semantic_trellis_bootstrap_start",
+          "semantic_trellis_bootstrap_status",
+          "semantic_trellis_bootstrap_next_batch",
+          "semantic_trellis_bootstrap_submit_chunk_summaries",
+          "semantic_trellis_bootstrap_next_rollups",
+          "semantic_trellis_bootstrap_submit_file_summaries",
+          "semantic_trellis_bootstrap_context",
+          "semantic_trellis_bootstrap_complete",
           "semantic_trellis_validate_patch",
           "semantic_trellis_apply_patch",
         ]),
@@ -51,14 +64,20 @@ describe("MCP server", () => {
       expect(
         listed.tools.find((tool) => tool.name === "semantic_trellis_apply_patch")?.annotations,
       ).toMatchObject({ readOnlyHint: false, destructiveHint: true, idempotentHint: false });
-      expect(client.getInstructions()).toContain("Never call apply_patch directly");
+      expect(client.getInstructions()).toContain("Never apply a patch without validation");
 
       const status = await client.callTool({
         name: "semantic_trellis_status",
         arguments: {},
       });
       expect(status.isError).not.toBe(true);
-      expect(status.structuredContent).toMatchObject({ files: 1, nodes: 0, pendingReviews: 1 });
+      expect(status.structuredContent).toMatchObject({
+        files: 1,
+        nodes: 0,
+        pendingReviews: 1,
+        aiBootstrapped: false,
+        aiBootstrapStage: null,
+      });
 
       const wrongPrefix = await client.callTool({
         name: "semantic_trellis_review_queue",
@@ -70,6 +89,107 @@ describe("MCP server", () => {
         arguments: { pathPrefix: "src" },
       });
       expect(sourcePrefix.structuredContent).toMatchObject({ total: 1, returned: 1 });
+
+      const bootstrapPreview = await client.callTool({
+        name: "semantic_trellis_bootstrap_preview",
+        arguments: {},
+      });
+      expect(bootstrapPreview.isError).not.toBe(true);
+      expect(bootstrapPreview.structuredContent).toMatchObject({
+        totalFiles: 1,
+        suspiciousPaths: [],
+      });
+
+      const bootstrapStart = await client.callTool({
+        name: "semantic_trellis_bootstrap_start",
+        arguments: { sourceDisclosureApproved: true, maxChunkCharacters: 2_000 },
+      });
+      expect(bootstrapStart.isError).not.toBe(true);
+      const sessionId = String(
+        (bootstrapStart.structuredContent?.status as { sessionId?: unknown } | undefined)?.sessionId,
+      );
+      expect(sessionId).toHaveLength(64);
+
+      const sourceBatchResult = await client.callTool({
+        name: "semantic_trellis_bootstrap_next_batch",
+        arguments: { maxCharacters: 10_000, maxUnits: 10 },
+      });
+      const sourceBatch = JSON.parse(
+        sourceBatchResult.content[0]?.type === "text" ? sourceBatchResult.content[0].text : "{}",
+      ) as {
+        units: Array<{
+          id: string;
+          path: string;
+          hash: string;
+          chunkIndex: number;
+          startLine: number;
+          endLine: number;
+        }>;
+      };
+      expect(sourceBatch.units).toHaveLength(1);
+      const chunkSubmitted = await client.callTool({
+        name: "semantic_trellis_bootstrap_submit_chunk_summaries",
+        arguments: {
+          sessionId,
+          summaries: sourceBatch.units.map((unit) => ({
+            unitId: unit.id,
+            summary: `AI summary for ${unit.path}.`,
+            keyFacts: ["Exports one value."],
+            risks: [],
+            confidence: 0.9,
+            producer: "test-agent",
+            model: "test-model",
+          })),
+        },
+      });
+      expect(chunkSubmitted.structuredContent).toMatchObject({ stage: "summarize-files" });
+
+      const rollupResult = await client.callTool({
+        name: "semantic_trellis_bootstrap_next_rollups",
+        arguments: { limit: 5 },
+      });
+      const rollups = JSON.parse(
+        rollupResult.content[0]?.type === "text" ? rollupResult.content[0].text : "{}",
+      ) as {
+        files: Array<{
+          path: string;
+          hash: string;
+          chunks: Array<{ startLine: number; endLine: number; summary: string }>;
+          structural: { symbols: Array<{ qualifiedName: string }> };
+        }>;
+      };
+      expect(rollups.files).toHaveLength(1);
+      const fileSubmitted = await client.callTool({
+        name: "semantic_trellis_bootstrap_submit_file_summaries",
+        arguments: {
+          sessionId,
+          summaries: rollups.files.map((file) => ({
+            path: file.path,
+            hash: file.hash,
+            summary: "AI file summary for the fixture entry point.",
+            responsibilities: ["Expose the fixture value."],
+            keySymbols: file.structural.symbols.map((symbol) => symbol.qualifiedName),
+            dependencies: [],
+            inputs: [],
+            outputs: ["value"],
+            sideEffects: [],
+            risks: [],
+            concepts: ["fixture"],
+            evidence: file.chunks.map((chunk) => ({
+              startLine: chunk.startLine,
+              endLine: chunk.endLine,
+              description: chunk.summary,
+            })),
+            confidence: 0.9,
+            producer: "test-agent",
+            model: "test-model",
+          })),
+        },
+      });
+      expect(fileSubmitted.structuredContent).toMatchObject({
+        stage: "ready-for-curation",
+        fileCoverage: 1,
+      });
 
       const patch = {
         schemaVersion: 1 as const,
@@ -118,6 +238,83 @@ describe("MCP server", () => {
       });
       expect(applied.isError).not.toBe(true);
       expect(applied.structuredContent).toMatchObject({ nodes: 1, pendingReviews: 0 });
+
+      const completed = await client.callTool({
+        name: "semantic_trellis_bootstrap_complete",
+        arguments: {
+          sessionId,
+          graphDigest: validation.structuredContent?.proposedGraphDigest,
+        },
+      });
+      expect(completed.isError).not.toBe(true);
+      expect(completed.structuredContent).toMatchObject({ stage: "complete", fileCoverage: 1 });
+
+      const completedStatus = await client.callTool({
+        name: "semantic_trellis_status",
+        arguments: {},
+      });
+      expect(completedStatus.structuredContent).toMatchObject({
+        aiBootstrapped: true,
+        aiBootstrapStage: "complete",
+      });
+
+      const lockedUpdate = {
+        schemaVersion: 1 as const,
+        operations: [
+          {
+            op: "upsert-node" as const,
+            node: {
+              ...patch.operations[0].node,
+              summary: "Attempted locked-node replacement.",
+            },
+          },
+        ],
+      };
+      const lockedRejected = await client.callTool({
+        name: "semantic_trellis_validate_patch",
+        arguments: { patch: lockedUpdate },
+      });
+      expect(lockedRejected.isError).toBe(true);
+      const lockedReviewed = await client.callTool({
+        name: "semantic_trellis_validate_patch",
+        arguments: {
+          patch: {
+            ...lockedUpdate,
+            operations: [{ ...lockedUpdate.operations[0], overrideLocked: true }],
+          },
+        },
+      });
+      expect(lockedReviewed.isError).not.toBe(true);
+
+      const structure = await client.callTool({
+        name: "semantic_trellis_structure",
+        arguments: {},
+      });
+      expect(structure.isError).not.toBe(true);
+      expect(structure.structuredContent).toMatchObject({
+        parsedFiles: 0,
+        reusedFiles: 1,
+        filesSupported: 1,
+      });
+
+      const structuralGrep = await client.callTool({
+        name: "semantic_trellis_grep",
+        arguments: { pattern: "value", fixed: true, pathPrefix: "src" },
+      });
+      expect(structuralGrep.isError).not.toBe(true);
+      expect(structuralGrep.structuredContent).toMatchObject({
+        totalHits: 1,
+        curatedAttributionRate: 1,
+      });
+
+      const fileSymbols = await client.callTool({
+        name: "semantic_trellis_file_symbols",
+        arguments: { file: "src/index.ts" },
+      });
+      expect(fileSymbols.isError).not.toBe(true);
+      expect(fileSymbols.structuredContent).toMatchObject({
+        symbols: expect.arrayContaining([expect.objectContaining({ name: "value" })]),
+      });
 
       const search = await client.callTool({
         name: "semantic_trellis_search",
