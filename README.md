@@ -42,6 +42,7 @@ The first milestone is a working local vertical slice:
 - apply reviewed graph patches;
 - audit graph integrity and source coverage;
 - expose the workflow through the `strellis` CLI.
+- expose the curated graph and guarded maintenance workflow over MCP.
 
 AI-driven classification, language-aware symbol extraction, MCP integration,
 and the visual curator are intentionally later milestones. Their boundaries are
@@ -81,11 +82,29 @@ strellis curate <patch-file> [repository]
 strellis sync [repository]
 strellis audit [repository]
 strellis status [repository]
+strellis mcp [repository]
 ```
 
 The `curate` command consumes an explicit JSON patch. This is the first durable
 seam for a future curator agent: the agent proposes operations, the domain layer
 validates them, and only then does the canonical graph change.
+
+## MCP for coding agents
+
+SemanticTrellis ships a local stdio MCP server. Build the project, then start it
+for one fixed repository:
+
+```bash
+npm run build
+node dist/mcp/stdio.js /path/to/repository
+```
+
+The server exposes curated graph search, graph neighborhoods, status, audit,
+review queue access, incremental sync, and guarded curation. Canonical writes
+require a validation token tied to the exact patch and current graph state.
+
+See [MCP integration](docs/integrations/mcp.md) for Codex and generic host
+configuration.
 
 ## Repository layout
 
@@ -95,6 +114,7 @@ src/
   cli/               Command-line adapter
   domain/            Stable graph and change-set rules
   infrastructure/    File system, hashing, and JSON persistence
+  mcp/               Agent-facing MCP tools, resources, and stdio transport
   ports/             Interfaces for future AI and parser adapters
 docs/
   adr/               Architecture decision records
@@ -121,6 +141,7 @@ intended to be reviewed and committed.
 - [Architecture overview](docs/architecture/overview.md)
 - [Storage model](docs/architecture/storage-model.md)
 - [Roadmap](docs/roadmap.md)
+- [MCP integration](docs/integrations/mcp.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Language policy

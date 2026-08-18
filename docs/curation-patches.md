@@ -4,6 +4,16 @@ The curator boundary is an explicit JSON transaction. An AI adapter, a visual
 reviewer, or a person can produce the same format. The domain layer applies the
 operations in memory, audits the complete result, and writes only a valid graph.
 
+Agent integrations add an optimistic-concurrency boundary:
+
+1. call `semantic_trellis_validate_patch` with the exact patch;
+2. review the proposed counts, warnings, and graph digests;
+3. obtain user approval for the canonical write;
+4. call `semantic_trellis_apply_patch` with the unchanged patch and returned
+   validation token.
+
+The token becomes invalid when either the graph or patch changes.
+
 See `examples/curation-patch.example.json` for a minimal patch.
 
 ## Operations

@@ -34,6 +34,7 @@ const DEFAULT_EXTENSIONS = [
 
 const DEFAULT_EXCLUDED_DIRECTORIES = [
   ".git",
+  ".codex",
   ".semantic-trellis",
   ".idea",
   ".vscode",

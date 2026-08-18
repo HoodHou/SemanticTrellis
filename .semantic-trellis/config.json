@@ -35,6 +35,7 @@
     ],
     "excludeDirectories": [
       ".git",
+      ".codex",
       ".semantic-trellis",
       ".idea",
       ".vscode",

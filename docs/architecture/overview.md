@@ -96,6 +96,19 @@ Provider ports       File system and JSON storage
 The domain layer is platform independent. AI providers, parser runtimes,
 databases, and MCP are adapters at the boundary.
 
+## Agent boundary
+
+MCP is the primary machine-facing adapter. A server instance is bound to one
+repository root at process start, so tool arguments cannot redirect it to a
+different workspace. Read tools return structured content and human-readable
+text; write tools declare their effects through MCP annotations.
+
+Canonical graph changes use two calls. `validate_patch` applies a proposal only
+in memory and returns a token derived from the current graph and exact patch.
+`apply_patch` recomputes that token immediately before writing and rejects stale
+or changed input. Host approval remains necessary because MCP annotations are
+hints rather than an authorization mechanism.
+
 ## Planned extension points
 
 - language parser adapters;

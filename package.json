@@ -1,11 +1,12 @@
 {
   "name": "semantic-trellis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "A curated semantic graph that learns a codebase once and maintains only its deltas.",
   "type": "module",
   "bin": {
-    "strellis": "./dist/cli/index.js"
+    "strellis": "./dist/cli/index.js",
+    "strellis-mcp": "./dist/mcp/stdio.js"
   },
   "exports": {
     ".": {
@@ -19,6 +20,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli/index.ts",
+    "mcp": "tsx src/mcp/stdio.ts",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -29,9 +31,14 @@
   },
   "license": "UNLICENSED",
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^22.20.1",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.4.3"
   }
 }

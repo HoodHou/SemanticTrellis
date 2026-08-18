@@ -42,7 +42,8 @@
 
 ## Milestone 5 - Agent integrations
 
-- Expose graph queries over MCP.
+- [x] Expose graph queries, review state, audit, sync, and guarded curation over
+  local stdio MCP.
 - Add Codex, Claude Code, Cursor, and editor integrations.
 - Provide repository map, semantic search, trace, and impact tools.
 - Add token and latency measurements.

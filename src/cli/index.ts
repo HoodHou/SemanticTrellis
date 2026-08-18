@@ -11,6 +11,7 @@ import {
   syncProject,
 } from "../application/index.js";
 import type { AuditIssue } from "../domain/model.js";
+import { serveSemanticTrellisStdio } from "../mcp/stdio.js";
 import { VERSION } from "../version.js";
 
 const HELP = `SemanticTrellis ${VERSION}
@@ -22,6 +23,7 @@ Usage:
   strellis sync [repository]
   strellis audit [repository]
   strellis status [repository]
+  strellis mcp [repository]
   strellis version
   strellis help
 
@@ -32,6 +34,7 @@ Lifecycle:
   sync       Record repository deltas without rewriting approved meaning.
   audit      Verify graph integrity, provenance, and source coverage.
   status     Show the current repository and review state.
+  mcp        Serve SemanticTrellis tools and resources over stdio.
 `;
 
 export interface CliIo {
@@ -122,6 +125,9 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
         io.out(`Pending reviews: ${result.pendingReviews}`);
         return 0;
       }
+      case "mcp":
+        serveSemanticTrellisStdio(rootFrom(rest[0]));
+        return 0;
       default:
         io.error(`Unknown command: ${command}`);
         io.error("Run `strellis help` for usage.");

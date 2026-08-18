@@ -78,7 +78,7 @@
       "id": "build-and-delivery-tooling",
       "name": "Build and Delivery Tooling",
       "kind": "component",
-      "summary": "Defines the Node.js package, TypeScript compiler policy, dependency lock, and continuous integration workflow.",
+      "summary": "Defines the Node.js package, version history, TypeScript compiler policy, dependency lock, and continuous integration workflow.",
       "sources": [
         {
           "path": "package.json",
@@ -86,6 +86,10 @@
         },
         {
           "path": "package-lock.json",
+          "role": "supporting"
+        },
+        {
+          "path": "CHANGELOG.md",
           "role": "supporting"
         },
         {
@@ -131,7 +135,7 @@
       "id": "curated-graph-domain",
       "name": "Curated Graph Domain",
       "kind": "subsystem",
-      "summary": "Defines stable semantic identities, graph patch transactions, repository snapshots, review queues, and graph audit rules.",
+      "summary": "Defines stable semantic identities, graph queries, graph patch transactions, repository snapshots, review queues, and graph audit rules.",
       "sources": [
         {
           "path": "src/domain/model.ts",
@@ -143,6 +147,10 @@
         },
         {
           "path": "src/domain/graph.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/domain/query.ts",
           "role": "primary"
         },
         {
@@ -198,10 +206,46 @@
       "locked": true
     },
     {
+      "id": "mcp-agent-adapter",
+      "name": "MCP Agent Adapter",
+      "kind": "subsystem",
+      "summary": "Exposes the fixed repository's curated graph, review state, audits, delta sync, and validation-token curation workflow to MCP-compatible agents.",
+      "sources": [
+        {
+          "path": "src/mcp/server.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/mcp/schemas.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/mcp/stdio.ts",
+          "role": "primary"
+        },
+        {
+          "path": "docs/integrations/mcp.md",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0004-mcp-first-agent-boundary.md",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "mcp",
+        "agent",
+        "adapter",
+        "integration"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
       "id": "repository-infrastructure",
       "name": "Repository Infrastructure",
       "kind": "subsystem",
-      "summary": "Owns repository scanning, content hashing, project layout, validated JSON persistence, and local state boundaries.",
+      "summary": "Owns repository scanning, canonical hashing, project layout, validated JSON persistence, and local state boundaries.",
       "sources": [
         {
           "path": "src/infrastructure/repository-scanner.ts",
@@ -213,6 +257,10 @@
         },
         {
           "path": "src/infrastructure/json-store.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "src/infrastructure/digest.ts",
           "role": "supporting"
         },
         {
@@ -277,7 +325,7 @@
       "id": "verification-suite",
       "name": "Verification Suite",
       "kind": "component",
-      "summary": "Verifies snapshot deltas, graph integrity, and the complete local project lifecycle.",
+      "summary": "Verifies snapshot deltas, graph integrity, graph queries, the complete project lifecycle, and MCP in-memory and stdio behavior.",
       "sources": [
         {
           "path": "test/snapshot.test.ts",
@@ -288,13 +336,26 @@
           "role": "primary"
         },
         {
+          "path": "test/query.test.ts",
+          "role": "primary"
+        },
+        {
           "path": "test/project-flow.test.ts",
+          "role": "primary"
+        },
+        {
+          "path": "test/mcp.test.ts",
+          "role": "primary"
+        },
+        {
+          "path": "test/mcp-stdio.test.ts",
           "role": "primary"
         }
       ],
       "tags": [
         "test",
-        "verification"
+        "verification",
+        "mcp"
       ],
       "status": "approved",
       "locked": false
@@ -326,11 +387,43 @@
       "status": "approved"
     },
     {
+      "id": "cli-depends-on-mcp",
+      "from": "command-line-adapter",
+      "to": "mcp-agent-adapter",
+      "relation": "depends-on",
+      "description": "The CLI starts the local stdio MCP adapter through the mcp command.",
+      "status": "approved"
+    },
+    {
       "id": "governance-configures-product",
       "from": "architecture-governance",
       "to": "semantic-trellis-product",
       "relation": "configures",
       "description": "Architecture records and repository rules constrain product evolution.",
+      "status": "approved"
+    },
+    {
+      "id": "mcp-depends-on-application",
+      "from": "mcp-agent-adapter",
+      "to": "application-workflows",
+      "relation": "depends-on",
+      "description": "MCP tools delegate lifecycle behavior to application use cases.",
+      "status": "approved"
+    },
+    {
+      "id": "mcp-depends-on-domain",
+      "from": "mcp-agent-adapter",
+      "to": "curated-graph-domain",
+      "relation": "depends-on",
+      "description": "MCP graph and search tools use pure domain query rules and patch types.",
+      "status": "approved"
+    },
+    {
+      "id": "mcp-depends-on-infrastructure",
+      "from": "mcp-agent-adapter",
+      "to": "repository-infrastructure",
+      "relation": "depends-on",
+      "description": "MCP resources load fixed-repository graph and review state through infrastructure adapters.",
       "status": "approved"
     },
     {
@@ -371,6 +464,14 @@
       "to": "repository-infrastructure",
       "relation": "contains",
       "description": "The product owns repository and persistence infrastructure.",
+      "status": "approved"
+    },
+    {
+      "id": "product-contains-mcp",
+      "from": "semantic-trellis-product",
+      "to": "mcp-agent-adapter",
+      "relation": "contains",
+      "description": "The product includes MCP as its primary agent-facing boundary.",
       "status": "approved"
     },
     {

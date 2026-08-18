@@ -7,3 +7,6 @@ Thumbs.db
 
 # Local development state created when SemanticTrellis analyzes itself.
 /.semantic-trellis/local/
+
+# Project-scoped Codex MCP configuration contains machine-specific paths.
+/.codex/config.toml

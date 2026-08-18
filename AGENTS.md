@@ -19,6 +19,8 @@ Before changing architecture or storage behavior, read:
   infrastructure adapters.
 - `src/infrastructure/` owns file-system access, hashing, and persistence.
 - `src/cli/` only parses input, calls application use cases, and formats output.
+- `src/mcp/` exposes application use cases to agents and must bind each server
+  instance to one fixed repository root.
 - `src/ports/` defines provider-facing interfaces; provider SDKs must not leak
   into the domain model.
 
@@ -30,6 +32,8 @@ Before changing architecture or storage behavior, read:
 - Routine sync must produce a review queue, not silently rewrite semantic
   classifications.
 - Patch application must validate graph referential integrity before writing.
+- MCP graph writes must use the validate-token-apply workflow; no direct write
+  tool may bypass it.
 - Every node must be able to cite repository-relative source paths.
 - New storage formats require a schema version and an ADR.
 
