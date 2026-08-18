@@ -17,6 +17,7 @@
 
 ### Changed
 
+- Licensed SemanticTrellis under the MIT License.
 - Structural cache schema is version 2 and invalidates older disposable indexes.
 - Structural MCP, CLI, and AI-bootstrap rollups report parser diagnostics.
 

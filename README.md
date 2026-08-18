@@ -171,5 +171,6 @@ comments, documentation, configuration, tests, issue text, and commit messages.
 
 ## License
 
-No open-source license has been selected yet. The package is marked private to
-prevent accidental publication during early development.
+SemanticTrellis is licensed under the [MIT License](LICENSE). The npm package
+remains marked private to prevent accidental publication during early
+development.
