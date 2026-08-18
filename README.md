@@ -5,9 +5,6 @@ intentional full bootstrap once, lets an agent organize the result into stable
 systems and relationships, and then maintains only the affected part of the
 graph as the repository changes.
 
-The project is deliberately built from first principles. It does not copy
-Graft's implementation, storage format, prompts, or runtime architecture.
-
 ## Product thesis
 
 Most code intelligence systems repeatedly rediscover the same repository.
