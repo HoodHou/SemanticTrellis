@@ -33,5 +33,4 @@ Create an ADR when a change affects any of the following:
 
 ## Language
 
-All project artifacts and collaboration written into the repository must be in
-English.
+All project artifacts and collaboration written into the repository please use English.
