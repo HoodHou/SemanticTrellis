@@ -88,6 +88,7 @@ strellis grep <pattern> [repository] --in src --context-lines 2 --include-body
 strellis symbols <file> [repository] --include-body
 strellis trace <symbol> [repository] --direction incoming --depth 2 --include-body
 strellis search-symbols <query> [repository]
+strellis ask <query> [repository] --in src
 strellis mcp [repository]
 ```
 
@@ -119,9 +120,12 @@ and JavaScript and the ast-grep Node API with a prebuilt Tree-sitter grammar for
 C#. Each file owns its symbols, parser diagnostics, and unresolved references;
 unchanged contributions are reused by stat-assisted content hashes. Queries
 repair stale deltas automatically, cache verified source and parsed indexes in
-long-lived MCP processes, and can return bounded context or complete symbol
-bodies. A target-name reverse index limits edge re-resolution to changed and
-affected files.
+long-lived MCP processes, decode byte-order-marked source, and can return bounded
+context or complete symbol bodies. `ask` combines IDF-weighted natural-language
+ranking and query-aware eight-line source cruxes in one call; `--full` opts into
+complete definitions. Call arity reduces safe overload ambiguity,
+equivalent C# partial types resolve as one logical target, and a target-name
+reverse index limits edge re-resolution to changed and affected files.
 
 See [MCP integration](docs/integrations/mcp.md) for Codex and generic host
 configuration.

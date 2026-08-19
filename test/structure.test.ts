@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applyValidatedCurationPatch,
+  askProject,
   buildStructuralIndex,
   grepStructure,
   initializeProject,
@@ -76,6 +77,18 @@ describe("structural contributions", () => {
       parsedFiles: 1,
       reusedFiles: 1,
       removedFiles: 0,
+      resolvedFiles: 1,
+    });
+
+    await writeFile(
+      join(root, "src", "helper.ts"),
+      "// implementation-only change\nexport function helper(): number { return 1; }\n",
+      "utf8",
+    );
+    const implementationChanged = await buildStructuralIndex(root);
+    expect(implementationChanged.metrics).toMatchObject({
+      parsedFiles: 1,
+      reusedFiles: 1,
       resolvedFiles: 1,
     });
 
@@ -218,5 +231,61 @@ describe("structural contributions", () => {
     expect(result.groups).toEqual(
       expect.arrayContaining([expect.objectContaining({ symbolName: "newlyAdded" })]),
     );
+  });
+
+  it("returns query-aware eight-line ask cruxes with an explicit full-body mode", async () => {
+    const root = await fixture();
+    await writeFile(
+      join(root, "src", "crux.ts"),
+      `export function graphPatchRejectedMechanism(): void {
+  const step01 = 1;
+  const step02 = 2;
+  const step03 = 3;
+  const step04 = 4;
+  const step05 = 5;
+  const step06 = 6;
+  const step07 = 7;
+  const step08 = 8;
+  const step09 = 9;
+  throw new Error("Graph patch rejected: dangling edge");
+  const step10 = 10;
+  const step11 = 11;
+  const step12 = 12;
+  void [step01, step02, step03, step04, step05, step06, step07, step08, step09, step10, step11, step12];
+}
+`,
+      "utf8",
+    );
+    await buildStructuralIndex(root);
+
+    const crux = await askProject(root, "graph patch rejected", {
+      pathPrefix: "src",
+      repairStale: false,
+    });
+    const cruxSource = crux.sourceContexts.find((source) =>
+      source.symbolId.includes("graphPatchRejectedMechanism"),
+    );
+    expect(crux.hits.length).toBeLessThanOrEqual(4);
+    expect(crux.hits[0]?.symbol.name).toBe("graphPatchRejectedMechanism");
+    expect(cruxSource?.context.text).toContain("Graph patch rejected");
+    expect(
+      (cruxSource?.context.endLine ?? 0) - (cruxSource?.context.startLine ?? 0) + 1,
+    ).toBeLessThanOrEqual(8);
+    expect(cruxSource?.context.truncated).toBe(true);
+    expect(JSON.stringify(crux).length).toBeLessThanOrEqual(7_000);
+
+    const full = await askProject(root, "graph patch rejected", {
+      pathPrefix: "src",
+      fullBody: true,
+      maxSourceCharacters: 10_000,
+      repairStale: false,
+    });
+    const fullSource = full.sourceContexts.find((source) =>
+      source.symbolId.includes("graphPatchRejectedMechanism"),
+    );
+    expect(
+      (fullSource?.context.endLine ?? 0) - (fullSource?.context.startLine ?? 0) + 1,
+    ).toBeGreaterThan(8);
+    expect(fullSource?.context.truncated).toBe(false);
   });
 });

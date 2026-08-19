@@ -37,17 +37,21 @@ optimization and can be rebuilt.
 ### `.semantic-trellis/local/review-queue.json`
 
 Pending bootstrap and maintenance work. It records which files changed, why
-they require review, and which curated nodes may be affected.
+they require review, and which curated nodes may be affected. Entries selected
+by `mark-reviewed` participate in the curation validation token so a newer delta
+for the same path cannot be cleared by an older approval.
 
 ### `.semantic-trellis/local/structural-index.json`
 
 Disposable per-file structural contributions and their resolved edges. Each
 contribution is keyed by repository-relative path, source hash, language, and
 extractor version and contains symbols, unresolved references, and parser
-diagnostics. The index also stores repository revision/untracked state,
-per-file resolution metrics, and target-name reverse references for incremental
-edge repair. An unchanged file reuses its contribution without parsing. The
-current structural cache schema is version 5; older local indexes are discarded
+diagnostics. Callable symbols include accepted argument ranges, references
+include observed argument counts, and C# declarations record partial identity.
+The index also stores repository revision/untracked state, per-file resolution
+metrics, and target-name reverse references for incremental edge repair. An
+unchanged file reuses its contribution without parsing. The
+current structural cache schema is version 6; older local indexes are discarded
 and rebuilt.
 
 ### `.semantic-trellis/local/agent-bootstrap.json`

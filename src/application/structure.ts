@@ -12,6 +12,7 @@ import { readGitRepositoryState } from "../infrastructure/repository-state.js";
 import { scanRepositoryDetailed } from "../infrastructure/repository-scanner.js";
 import { rememberVerifiedSource } from "../infrastructure/source-cache.js";
 import { loadStructuralIndex, saveStructuralIndex } from "../infrastructure/structural-store.js";
+import { decodeSourceText } from "../infrastructure/text-decoder.js";
 import { digestBytes } from "../infrastructure/digest.js";
 import { resolveStructuralGraph } from "../structural/resolver.js";
 
@@ -24,13 +25,35 @@ function contributionReferenceNames(contribution: FileContribution): string[] {
   return [...names].sort();
 }
 
-function contributionDefinitionNames(contribution: FileContribution | undefined): string[] {
-  if (contribution === undefined) return [];
-  return [...new Set(
-    contribution.symbols
-      .filter((symbol) => symbol.kind !== "file")
-      .map((symbol) => symbol.name),
-  )].sort();
+function resolutionDefinitionsByName(
+  contribution: FileContribution | undefined,
+): Map<string, string[]> {
+  const values = new Map<string, string[]>();
+  for (const symbol of contribution?.symbols ?? []) {
+    if (symbol.kind === "file") continue;
+    const definitions = values.get(symbol.name) ?? [];
+    definitions.push(`${symbol.kind}:${symbol.id}`);
+    values.set(symbol.name, definitions);
+  }
+  for (const definitions of values.values()) definitions.sort();
+  return values;
+}
+
+function changedDefinitionNames(
+  before: FileContribution | undefined,
+  after: FileContribution | undefined,
+): string[] {
+  const beforeByName = resolutionDefinitionsByName(before);
+  const afterByName = resolutionDefinitionsByName(after);
+  const names = new Set([...beforeByName.keys(), ...afterByName.keys()]);
+  return [...names]
+    .filter((name) => {
+      const beforeDefinitions = beforeByName.get(name) ?? [];
+      const afterDefinitions = afterByName.get(name) ?? [];
+      return beforeDefinitions.length !== afterDefinitions.length ||
+        beforeDefinitions.some((definition, index) => definition !== afterDefinitions[index]);
+    })
+    .sort();
 }
 
 function recordedStrings(record: Record<string, string[]>, key: string): string[] {
@@ -232,8 +255,9 @@ export async function buildStructuralIndex(root: string): Promise<StructuralBuil
       reusedFiles += 1;
       continue;
     }
-    const source = scan.sources[file.path] ??
-      await readFile(resolve(absoluteRoot, file.path), "utf8");
+    const source = scan.sources[file.path] ?? decodeSourceText(
+      await readFile(resolve(absoluteRoot, file.path)),
+    );
     contributions[file.path] = adapter.extract({
       path: file.path,
       hash: file.hash,
@@ -285,8 +309,7 @@ export async function buildStructuralIndex(root: string): Promise<StructuralBuil
       const before = previous.contributions[path];
       const after = contributions[path];
       if (before === undefined || after === undefined) fileSetChanged = true;
-      for (const name of contributionDefinitionNames(before)) touchedNames.add(name);
-      for (const name of contributionDefinitionNames(after)) touchedNames.add(name);
+      for (const name of changedDefinitionNames(before, after)) touchedNames.add(name);
     }
 
     const affectedPaths = new Set(changedPaths);

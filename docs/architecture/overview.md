@@ -45,19 +45,26 @@ to curated nodes through source provenance.
 Symbol-level maintenance removes a changed file's previous contribution and
 inserts the new one while replaying unchanged contributions. A persisted
 target-name reverse index identifies unchanged files whose references may be
-affected by changed definitions. Only changed and affected files are re-resolved;
-an unchanged refresh skips edge resolution and index persistence entirely.
+affected by changed definitions. Resolution-relevant symbol identities are
+compared before propagation, so implementation-only edits stay within their
+owning file. Only changed and affected files are re-resolved; an unchanged
+refresh skips edge resolution and index persistence entirely.
 
 Read queries use the cached in-process index, probe Git deltas or source stats,
 and repair stale contributions once before retrying. Source reads are verified
-and cached by content hash. This keeps MCP and CLI behavior consistent while
-preserving exact stale-source detection.
+and cached by content hash, with byte-order-mark-aware decoding. Natural-language
+`ask` retrieval combines ranked symbols and bounded verified source bodies in
+one call. This keeps MCP and CLI behavior consistent while preserving exact
+stale-source detection.
 
 ### Curator proposals
 
 An AI curator never writes the graph directly. It emits a patch containing
 typed operations. Patch validation checks stable identity, locked nodes,
-referential integrity, and source provenance before persistence.
+referential integrity, and source provenance before persistence. Invalid or
+non-relative provenance is an error and blocks the patch. A source path missing
+from the current snapshot is a warning returned for review and does not block
+the write by itself.
 
 ### Curated semantic graph
 
@@ -118,10 +125,12 @@ different workspace. Read tools return structured content and human-readable
 text; write tools declare their effects through MCP annotations.
 
 Canonical graph changes use two calls. `validate_patch` applies a proposal only
-in memory and returns a token derived from the current graph and exact patch.
-`apply_patch` recomputes that token immediately before writing and rejects stale
-or changed input. Host approval remains necessary because MCP annotations are
-hints rather than an authorization mechanism.
+in memory and returns a token derived from the current graph, exact patch, and
+the current review-queue entries selected by `mark-reviewed`. `apply_patch`
+recomputes that token immediately before writing and rejects stale or changed
+input, while unrelated review items do not invalidate the token. Host approval
+remains necessary because MCP annotations are hints rather than an authorization
+mechanism.
 
 Locked curated nodes add another invariant: modification and removal are denied
 unless the exact patch operation explicitly carries `overrideLocked: true`.

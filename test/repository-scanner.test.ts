@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDefaultConfig } from "../src/domain/config.js";
 import { scanRepositoryDetailed } from "../src/infrastructure/repository-scanner.js";
+import { decodeSourceText } from "../src/infrastructure/text-decoder.js";
 
 const execFileAsync = promisify(execFile);
 const temporaryRoots: string[] = [];
@@ -71,5 +72,33 @@ describe("repository scanner", () => {
     });
     expect(forced.files[0]?.hash).toBe(changed.files[0]?.hash);
     expect(forced.files[0]?.hash).not.toBe(first.files[0]?.hash);
+  });
+
+  it("decodes byte-order-marked source before extraction or review", async () => {
+    const root = await mkdtemp(join(tmpdir(), "semantic-trellis-encoded-scan-"));
+    temporaryRoots.push(root);
+    await mkdir(join(root, "src"));
+    await execFileAsync("git", ["init", "--quiet"], { cwd: root, windowsHide: true });
+    const source = "class EncodedSource { void Run() {} }\n";
+    await writeFile(
+      join(root, "src", "encoded.cs"),
+      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(source, "utf16le")]),
+    );
+
+    const scan = await scanRepositoryDetailed(root, createDefaultConfig("fixture").source, {
+      captureSource: (path) => path.endsWith(".cs"),
+    });
+    expect(scan.sources["src/encoded.cs"]).toBe(source);
+
+    const utf16BeBody = Buffer.from(source, "utf16le");
+    for (let index = 0; index < utf16BeBody.length; index += 2) {
+      const first = utf16BeBody[index] ?? 0;
+      utf16BeBody[index] = utf16BeBody[index + 1] ?? 0;
+      utf16BeBody[index + 1] = first;
+    }
+    expect(decodeSourceText(Buffer.concat([
+      Buffer.from([0xfe, 0xff]),
+      utf16BeBody,
+    ]))).toBe(source);
   });
 });

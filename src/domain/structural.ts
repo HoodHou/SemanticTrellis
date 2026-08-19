@@ -1,4 +1,4 @@
-export const STRUCTURAL_SCHEMA_VERSION = 5 as const;
+export const STRUCTURAL_SCHEMA_VERSION = 6 as const;
 
 export type StructuralSymbolKind =
   | "file"
@@ -44,6 +44,13 @@ export interface StructuralSymbol {
   span: SourceSpan;
   signature: string;
   parentId: string | null;
+  callArity: StructuralCallArity | null;
+  partial: boolean;
+}
+
+export interface StructuralCallArity {
+  min: number;
+  max: number | null;
 }
 
 export interface StructuralReference {
@@ -53,6 +60,7 @@ export interface StructuralReference {
   kind: StructuralReferenceKind;
   targetName: string;
   targetQualifier: string | null;
+  argumentCount: number | null;
   line: number;
   column: number;
 }

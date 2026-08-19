@@ -4,6 +4,7 @@ import { lstat, opendir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type { FileRecord, SourcePolicy } from "../domain/model.js";
+import { decodeSourceText } from "./text-decoder.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -189,7 +190,7 @@ export async function scanRepositoryDetailed(
     }
     const bytes = await readFile(candidate.absolutePath);
     if (options.captureSource?.(candidate.relativePath) === true) {
-      sources[candidate.relativePath] = bytes.toString("utf8");
+      sources[candidate.relativePath] = decodeSourceText(bytes);
     }
     return {
       path: candidate.relativePath,

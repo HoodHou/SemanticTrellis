@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import * as z from "zod/v4";
 import {
   applyValidatedCurationPatch,
+  askProject,
   auditProject,
   buildStructuralIndex,
   finishAgentBootstrap,
@@ -41,6 +42,7 @@ import {
   searchOutputSchema,
   statusOutputSchema,
   structuralBuildMetricsSchema,
+  structuralAskOutputSchema,
   structuralGrepOutputSchema,
   structuralSymbolSearchOutputSchema,
   structuralTraceOutputSchema,
@@ -49,7 +51,7 @@ import {
 } from "./schemas.js";
 
 const INSTRUCTIONS =
-  "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use symbol_search for natural-language discovery and grep/trace with bounded source bodies for exact answers. For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.";
+  "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use ask for one-call natural-language discovery with bounded source bodies, symbol_search for ranked metadata, and grep/trace for exact or exhaustive answers. For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.";
 
 function success<T extends Record<string, unknown>>(value: T) {
   return {
@@ -572,6 +574,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
       inputSchema: z.object({
         query: z.string().min(1),
         limit: z.number().int().min(1).max(100).default(20),
+        pathPrefix: z.string().optional(),
       }),
       outputSchema: structuralSymbolSearchOutputSchema,
       annotations: {
@@ -580,9 +583,51 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
         openWorldHint: false,
       },
     },
-    async ({ query, limit }) =>
+    async ({ query, limit, pathPrefix }) =>
       safe(async () => ({
-        ...(await searchProjectSymbols(root, query, limit, false, true)),
+        ...(await searchProjectSymbols(
+          root,
+          query,
+          limit,
+          false,
+          true,
+          pathPrefix ?? null,
+        )),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_ask",
+    {
+      title: "Ask About Repository Code",
+      description:
+        "Answer a natural-language repository question with ranked symbols, curated attribution, and bounded verified source bodies in one call.",
+      inputSchema: z.object({
+        query: z.string().min(1),
+        limit: z.number().int().min(1).max(50).default(4),
+        pathPrefix: z.string().optional(),
+        includeBody: z.boolean().default(true),
+        fullBody: z.boolean().default(false),
+        maxSourceCharacters: z.number().int().min(0).max(200_000).optional(),
+      }),
+      outputSchema: structuralAskOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ query, limit, pathPrefix, includeBody, fullBody, maxSourceCharacters }) =>
+      safe(async () => ({
+        ...(await askProject(root, query, {
+          limit,
+          ...(pathPrefix === undefined ? {} : { pathPrefix }),
+          includeBody,
+          fullBody,
+          ...(maxSourceCharacters === undefined ? {} : { maxSourceCharacters }),
+          refresh: false,
+          repairStale: true,
+        })),
       })),
   );
 
@@ -591,7 +636,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Validate Curation Patch",
       description:
-        "Apply a proposed patch in memory, run repository-aware audit, and return a token bound to the exact patch and current graph. Call this before apply_patch.",
+        "Apply a proposed patch in memory, run repository-aware audit, and return a token bound to the exact patch, current graph, and selected review entries. Call this before apply_patch.",
       inputSchema: z.object({ patch: graphPatchSchema }),
       outputSchema: validationOutputSchema,
       annotations: {
@@ -609,7 +654,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Apply Validated Curation Patch",
       description:
-        "Modify the versioned curated graph using the exact patch and validation token returned by validate_patch. Rejects stale or changed input.",
+        "Modify the versioned curated graph using the exact patch and validation token returned by validate_patch. Rejects changed graph, patch, or selected review entries.",
       inputSchema: z.object({
         patch: graphPatchSchema,
         validationToken: z.string().length(64),

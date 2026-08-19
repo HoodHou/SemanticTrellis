@@ -6,16 +6,22 @@ import {
 } from "../src/domain/structural.js";
 import { searchStructuralSymbols, traceStructuralGraph } from "../src/structural/queries.js";
 
-function symbol(id: string): StructuralSymbol {
+function symbol(
+  id: string,
+  signature = `function ${id}()`,
+  path = "src/example.ts",
+): StructuralSymbol {
   return {
     id,
-    path: "src/example.ts",
+    path,
     name: id,
     qualifiedName: id,
     kind: "function",
     span: { startLine: 1, startColumn: 1, endLine: 1, endColumn: 2 },
-    signature: `function ${id}()`,
-    parentId: "src/example.ts#file",
+    signature,
+    parentId: `${path}#file`,
+    callArity: { min: 0, max: 0 },
+    partial: false,
   };
 }
 
@@ -96,6 +102,75 @@ describe("structural trace", () => {
     ]);
     expect(searchStructuralSymbols(index, "target handler", 2)[0]?.symbol.name).toBe(
       "TargetHandler",
+    );
+  });
+
+  it("uses term rarity and query coverage to suppress common-word-only matches", () => {
+    const symbols = [
+      symbol(
+        "applyValidatedCurationPatch",
+        "function applyValidatedCurationPatch(patch, expectedValidationToken)",
+      ),
+      symbol(
+        "validationToken",
+        "function validationToken(currentGraphDigest, patch, reviewStateDigest)",
+      ),
+      symbol(
+        "CurationValidation",
+        "interface CurationValidation { validationToken: string }",
+      ),
+      symbol(
+        "validationOutputSchema",
+        "validation output schema with validation token",
+      ),
+      symbol("applyChunkSummarySubmissions"),
+      symbol("applyFileSummarySubmissions"),
+      symbol("applyGraphPatch"),
+      symbol(
+        'it "rejects stale apply validation token"',
+        "test callback for stale apply validation token",
+        "test/curate.test.ts",
+      ),
+    ];
+    const index: StructuralIndex = {
+      schemaVersion: STRUCTURAL_SCHEMA_VERSION,
+      discoveryMode: "git",
+      repositoryRevision: "test",
+      untrackedPaths: [],
+      contributions: {
+        "src/example.ts": {
+          path: "src/example.ts",
+          hash: "hash",
+          sourceSize: 1,
+          sourceMtimeMs: 0,
+          language: "typescript",
+          extractorVersion: "test",
+          symbols,
+          references: [],
+          diagnostics: [],
+        },
+      },
+      edges: [],
+      resolution: {
+        resolvedReferences: 0,
+        unresolvedReferences: 0,
+        ambiguousReferences: 0,
+        unknownReceiverReferences: 0,
+      },
+      resolutionByFile: {},
+      referenceFilesByName: {},
+      referenceNamesByFile: {},
+    };
+
+    const hits = searchStructuralSymbols(index, "apply validation token", 7);
+    expect(hits.slice(0, 4).map((hit) => hit.symbol.name)).toEqual([
+      "validationToken",
+      "applyValidatedCurationPatch",
+      "CurationValidation",
+      "validationOutputSchema",
+    ]);
+    expect(hits.slice(0, 4).every((hit) => !hit.symbol.name.startsWith("applyChunk"))).toBe(
+      true,
     );
   });
 });

@@ -92,7 +92,15 @@ describe("curated graph", () => {
     const audit = auditGraph(graph, snapshot);
 
     expect(audit.issues.some((issue) => issue.code === "duplicate-node-id")).toBe(true);
-    expect(audit.issues.some((issue) => issue.code === "stale-source-path")).toBe(true);
+    expect(audit.issues.find((issue) => issue.code === "stale-source-path")?.severity).toBe(
+      "warning",
+    );
     expect(audit.issues.some((issue) => issue.code === "unclassified-source")).toBe(true);
+
+    graph.nodes[0]!.sources = [{ path: "../outside.ts", role: "primary" }];
+    expect(
+      auditGraph(graph, snapshot).issues.find((issue) => issue.code === "invalid-source-path")
+        ?.severity,
+    ).toBe("error");
   });
 });

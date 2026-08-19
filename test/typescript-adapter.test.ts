@@ -27,9 +27,15 @@ function helper(): void {}
       ]),
     );
     const run = contribution.symbols.find((symbol) => symbol.qualifiedName === "Service.run");
+    expect(run?.callArity).toEqual({ min: 0, max: 0 });
     expect(contribution.references).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ kind: "call", targetName: "helper", ownerSymbolId: run?.id }),
+        expect.objectContaining({
+          kind: "call",
+          targetName: "helper",
+          ownerSymbolId: run?.id,
+          argumentCount: 0,
+        }),
         expect.objectContaining({ kind: "extends", targetName: "BaseService" }),
       ]),
     );

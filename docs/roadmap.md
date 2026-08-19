@@ -19,6 +19,7 @@
   names through a persisted reverse index.
 - [x] Produce deterministic symbol search and bounded reference traces.
 - [x] Add natural-language structural symbol search and bounded source bodies.
+- [x] Combine natural-language ranking and verified source bodies in one-call Agent retrieval.
 
 ## Milestone 2 - AI bootstrap
 

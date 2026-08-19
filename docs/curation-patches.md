@@ -12,7 +12,10 @@ Agent integrations add an optimistic-concurrency boundary:
 4. call `semantic_trellis_apply_patch` with the unchanged patch and returned
    validation token.
 
-The token becomes invalid when either the graph or patch changes.
+The token becomes invalid when the graph, patch, or any review-queue entry
+selected by `mark-reviewed` changes. Queue changes on unrelated paths do not
+invalidate it. This prevents an approved patch from clearing a newer review
+item for the same source while keeping independent maintenance concurrent.
 
 See `examples/curation-patch.example.json` for a minimal patch.
 
@@ -44,7 +47,9 @@ Remove an edge by stable ID.
 ### `mark-reviewed`
 
 Remove matching source paths from the local review queue after their semantic
-classification has been handled.
+classification has been handled. Validation binds the current IDs and source
+hashes of those selected review entries into the token; the queue remains
+disposable and is not part of canonical graph authority.
 
 ## Review rule
 

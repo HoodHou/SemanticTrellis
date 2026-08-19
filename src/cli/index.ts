@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  askProject,
   auditProject,
   buildStructuralIndex,
   curateProject,
@@ -35,7 +36,8 @@ Usage:
   strellis grep <pattern> [repository] [--regex] [--ignore-case] [--in <path>] [--context-lines N] [--include-body] [--json]
   strellis symbols <file> [repository] [--include-body] [--json]
   strellis trace <symbol> [repository] [--direction incoming|outgoing|both] [--depth N] [--include-body] [--json]
-  strellis search-symbols <query> [repository] [--limit N] [--json]
+  strellis search-symbols <query> [repository] [--limit N] [--in <path>] [--json]
+  strellis ask <query> [repository] [--limit N] [--in <path>] [--full] [--no-body] [--json]
   strellis mcp [repository]
   strellis version
   strellis help
@@ -54,6 +56,7 @@ Lifecycle:
   symbols    List symbols extracted from one source file.
   trace      Walk resolved structural references around a symbol.
   search-symbols  Rank structural symbols by natural-language terms and graph importance.
+  ask        Return ranked symbols and bounded verified source bodies in one call.
   mcp        Serve SemanticTrellis tools and resources over stdio.
 `;
 
@@ -361,7 +364,7 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
         return 0;
       }
       case "search-symbols": {
-        const parsed = parseArguments(rest, new Set(["--limit"]));
+        const parsed = parseArguments(rest, new Set(["--limit", "--in"]));
         const query = parsed.positionals[0];
         if (query === undefined) throw new Error("search-symbols requires a query.");
         const result = await searchProjectSymbols(
@@ -370,6 +373,7 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
           positiveInteger(parsed.options.get("--limit"), 20, "--limit"),
           parsed.flags.has("--refresh"),
           !parsed.flags.has("--no-refresh"),
+          parsed.options.get("--in") ?? null,
         );
         if (parsed.flags.has("--json")) io.out(JSON.stringify(result, null, 2));
         else {
@@ -378,6 +382,45 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
               `${hit.symbol.qualifiedName} · ${hit.symbol.kind} · score ${hit.score.toFixed(1)} · ` +
                 `${hit.symbol.path}:L${hit.symbol.span.startLine}`,
             );
+          }
+        }
+        return 0;
+      }
+      case "ask": {
+        const parsed = parseArguments(
+          rest,
+          new Set(["--limit", "--in", "--max-source-characters"]),
+        );
+        const query = parsed.positionals[0];
+        if (query === undefined) throw new Error("ask requires a query.");
+        const result = await askProject(rootFrom(parsed.positionals[1]), query, {
+          limit: positiveInteger(parsed.options.get("--limit"), 4, "--limit"),
+          ...(parsed.options.has("--in")
+            ? { pathPrefix: parsed.options.get("--in") as string }
+            : {}),
+          includeBody: !parsed.flags.has("--no-body"),
+          fullBody: parsed.flags.has("--full"),
+          maxSourceCharacters: positiveInteger(
+            parsed.options.get("--max-source-characters"),
+            parsed.flags.has("--full") ? 20_000 : 4_000,
+            "--max-source-characters",
+          ),
+          refresh: parsed.flags.has("--refresh"),
+          repairStale: !parsed.flags.has("--no-refresh"),
+        });
+        if (parsed.flags.has("--json")) io.out(JSON.stringify(result, null, 2));
+        else {
+          for (const hit of result.hits) {
+            io.out(
+              `${hit.symbol.qualifiedName} · ${hit.symbol.kind} · score ${hit.score.toFixed(1)} · ` +
+                `${hit.symbol.path}:L${hit.symbol.span.startLine}`,
+            );
+          }
+          for (const source of result.sourceContexts) {
+            io.out(
+              `${source.path}:L${source.context.startLine}-L${source.context.endLine}`,
+            );
+            io.out(source.context.text);
           }
         }
         return 0;

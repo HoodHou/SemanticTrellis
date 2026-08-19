@@ -10,6 +10,27 @@ import type {
 } from "../domain/structural.js";
 import { symbolsById } from "./resolver.js";
 
+const CALLABLE_SEARCH_KINDS = new Set<StructuralSymbol["kind"]>([
+  "function",
+  "method",
+  "constructor",
+  "operator",
+]);
+const TYPE_SEARCH_KINDS = new Set<StructuralSymbol["kind"]>([
+  "class",
+  "interface",
+  "struct",
+  "record",
+  "type",
+]);
+const TEST_INTENT_TERMS = new Set([
+  "test",
+  "spec",
+  "verify",
+  "verification",
+  "coverage",
+]);
+
 function allSymbols(index: StructuralIndex): StructuralSymbol[] {
   return Object.values(index.contributions).flatMap((contribution) => contribution.symbols);
 }
@@ -52,6 +73,19 @@ function normalizedWords(value: string): string[] {
     .filter(Boolean);
 }
 
+function normalizedSearchTerm(value: string): string {
+  if (
+    value.length > 4 &&
+    value.endsWith("s") &&
+    !value.endsWith("ss") &&
+    !value.endsWith("us") &&
+    !value.endsWith("is")
+  ) {
+    return value.slice(0, -1);
+  }
+  return value;
+}
+
 function suggestionScore(symbol: StructuralSymbol, query: string): number {
   const normalized = query.trim().toLowerCase();
   const name = symbol.name.toLowerCase();
@@ -83,43 +117,107 @@ export function searchStructuralSymbols(
   query: string,
   limit = 20,
   curatedByPath: ReadonlyMap<string, readonly string[]> = new Map(),
+  pathPrefix: string | null = null,
 ): StructuralSymbolSearchHit[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return [];
-  const terms = normalizedWords(normalized);
+  const terms = [...new Set(
+    normalizedWords(normalized).map(normalizedSearchTerm),
+  )];
+  const prefix = pathPrefix
+    ?.replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/\/+$/, "") || null;
   const inDegree = new Map<string, number>();
   for (const edge of index.edges) inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
+  const documents = allSymbols(index)
+    .filter(
+      (symbol) =>
+        prefix === null || symbol.path === prefix || symbol.path.startsWith(`${prefix}/`),
+    )
+    .map((symbol) => ({
+      symbol,
+      name: symbol.name.toLowerCase(),
+      qualifiedName: symbol.qualifiedName.toLowerCase(),
+      signature: symbol.signature.toLowerCase(),
+      path: symbol.path.toLowerCase(),
+    }));
+  const documentFrequency = new Map(
+    terms.map((term) => [
+      term,
+      documents.filter((document) =>
+        document.name.includes(term) ||
+        document.qualifiedName.includes(term) ||
+        document.signature.includes(term) ||
+        document.path.includes(term),
+      ).length,
+    ]),
+  );
+  const idf = new Map(
+    terms.map((term) => [
+      term,
+      Math.log((documents.length + 1) / ((documentFrequency.get(term) ?? 0) + 1)) + 1,
+    ]),
+  );
+  const searchableTerms = terms.filter((term) => (documentFrequency.get(term) ?? 0) > 0);
+  const totalQueryWeight = searchableTerms.reduce(
+    (total, term) => total + (idf.get(term) ?? 1),
+    0,
+  );
+  const testIntent = terms.some((term) => TEST_INTENT_TERMS.has(term));
   const hits: StructuralSymbolSearchHit[] = [];
-  for (const symbol of allSymbols(index)) {
+  for (const document of documents) {
+    const { symbol, name, qualifiedName, signature, path } = document;
     const matchedFields = new Set<string>();
-    const name = symbol.name.toLowerCase();
-    const qualifiedName = symbol.qualifiedName.toLowerCase();
-    const signature = symbol.signature.toLowerCase();
-    const path = symbol.path.toLowerCase();
+    const matchedTerms = new Set<string>();
     let score = suggestionScore(symbol, normalized);
-    if (score > 0) matchedFields.add(name.includes(normalized) ? "name" : "qualifiedName");
+    if (name.includes(normalized)) matchedFields.add("name");
+    else if (qualifiedName.includes(normalized)) matchedFields.add("qualifiedName");
     for (const term of terms) {
+      const weight = idf.get(term) ?? 1;
+      let matched = false;
       if (name.includes(term)) {
-        score += 14;
+        score += 14 * weight;
         matchedFields.add("name");
+        matched = true;
       }
       if (qualifiedName.includes(term)) {
-        score += 9;
+        score += 9 * weight;
         matchedFields.add("qualifiedName");
+        matched = true;
       }
       if (signature.includes(term)) {
-        score += 5;
+        score += 5 * weight;
         matchedFields.add("signature");
+        matched = true;
       }
       if (path.includes(term)) {
-        score += 3;
+        score += 3 * weight;
         matchedFields.add("path");
+        matched = true;
       }
+      if (matched) matchedTerms.add(term);
+    }
+    if (matchedTerms.size > 0 && totalQueryWeight > 0) {
+      const matchedWeight = [...matchedTerms].reduce(
+        (total, term) => total + (idf.get(term) ?? 1),
+        0,
+      );
+      const coverage = matchedWeight / totalQueryWeight;
+      score += coverage * 20;
+      if (terms.length > 1 && matchedTerms.size === terms.length) score += 12;
     }
     const degree = inDegree.get(symbol.id) ?? 0;
     if (score > 0) score += Math.min(12, Math.log2(degree + 1) * 2);
     const curatedNodeIds = [...new Set(curatedByPath.get(symbol.path) ?? [])].sort();
     if (curatedNodeIds.length > 0 && score > 0) score += 6;
+    if (CALLABLE_SEARCH_KINDS.has(symbol.kind)) {
+      score += 8;
+    } else if (TYPE_SEARCH_KINDS.has(symbol.kind)) {
+      score += 4;
+    }
+    const testPath = /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|\.(?:test|spec)\./.test(path);
+    if (testPath && !testIntent) score *= 0.25;
     if (score > 0) {
       hits.push({
         symbol,

@@ -43,6 +43,7 @@ for protocol messages; diagnostics are written to standard error.
 | `semantic_trellis_file_symbols` | Read every extracted symbol and optionally bounded bodies in one file |
 | `semantic_trellis_trace` | Trace structural edges, return miss suggestions, and optionally bounded bodies |
 | `semantic_trellis_symbol_search` | Rank symbols by natural-language terms, signatures, graph importance, and curated provenance |
+| `semantic_trellis_ask` | Return a ranked top-4 with query-aware eight-line cruxes; full bodies are opt-in |
 | `semantic_trellis_validate_patch` | Validate a patch without writing |
 | `semantic_trellis_apply_patch` | Apply the exact validated patch to the canonical graph |
 
@@ -57,16 +58,20 @@ for protocol messages; diagnostics are written to standard error.
 Agents must never call `semantic_trellis_apply_patch` directly.
 
 1. Read status and pending review work.
-2. Let structural read tools repair ordinary source deltas automatically; use
+2. Use `semantic_trellis_ask` for a natural-language source bundle, or a more
+   specific structural tool when the task already has an exact identifier.
+3. Let structural read tools repair ordinary source deltas automatically; use
    `semantic_trellis_structure` when an explicit full refresh is desired.
-3. Read or search the relevant curated or structural neighborhood.
-4. Build a small graph patch with source evidence.
-5. Call `semantic_trellis_validate_patch`.
-6. Present the proposed change to the user and obtain approval.
-7. Call `semantic_trellis_apply_patch` with the unchanged patch and validation
+4. Read or search the relevant curated or structural neighborhood.
+5. Build a small graph patch with source evidence.
+6. Call `semantic_trellis_validate_patch`.
+7. Present the proposed change to the user and obtain approval.
+8. Call `semantic_trellis_apply_patch` with the unchanged patch and validation
    token.
 
-The server rejects the write if the graph or patch changed after validation.
+The server rejects the write if the graph, patch, or a review entry selected by
+`mark-reviewed` changed after validation. Review changes on unrelated paths do
+not invalidate the token.
 
 The first full review has an earlier consent boundary: call
 `semantic_trellis_bootstrap_preview`, show its manifest to the user, and call

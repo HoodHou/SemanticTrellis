@@ -43,7 +43,7 @@
       "id": "application-workflows",
       "name": "Application Workflows",
       "kind": "subsystem",
-      "summary": "Coordinates initialization, bootstrap, curation, synchronization, audit, and status use cases.",
+      "summary": "Coordinates initialization, bootstrap, curation, synchronization, audit, and status use cases, including optimistic concurrency over the canonical graph, exact patch, and selected review entries.",
       "sources": [
         {
           "path": "src/application/initialize.ts",
@@ -76,7 +76,8 @@
       ],
       "tags": [
         "application",
-        "workflow"
+        "workflow",
+        "concurrency"
       ],
       "status": "approved",
       "locked": true
@@ -150,7 +151,7 @@
       "id": "command-line-adapter",
       "name": "Command-Line Adapter",
       "kind": "component",
-      "summary": "Exposes the complete SemanticTrellis lifecycle and cached structural grep, symbols, trace, natural-language search, source-context, repair, and metrics workflows through the strellis command-line interface.",
+      "summary": "Exposes the complete lifecycle and structural grep, symbols, trace, search, and ask workflows, with compact top-4 crux defaults, full-body opt-in, repair controls, and metrics.",
       "sources": [
         {
           "path": "src/cli/index.ts",
@@ -164,7 +165,9 @@
       "tags": [
         "cli",
         "adapter",
-        "retrieval"
+        "retrieval",
+        "ask",
+        "crux"
       ],
       "status": "approved",
       "locked": false
@@ -224,7 +227,7 @@
       "id": "curation-patch-contract",
       "name": "Curation Patch Contract",
       "kind": "concept",
-      "summary": "Defines the explicit review transaction used by humans, agents, and future visual tooling to modify the canonical graph.",
+      "summary": "Defines the explicit review transaction and validation-token boundary used by humans, agents, and future visual tooling to modify the canonical graph without clearing newer same-path review work.",
       "sources": [
         {
           "path": "docs/curation-patches.md",
@@ -233,12 +236,17 @@
         {
           "path": "examples/curation-patch.example.json",
           "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0012-review-selection-concurrency.md",
+          "role": "supporting"
         }
       ],
       "tags": [
         "curation",
         "transaction",
-        "review"
+        "review",
+        "concurrency"
       ],
       "status": "approved",
       "locked": true
@@ -247,7 +255,7 @@
       "id": "language-extraction-adapters",
       "name": "Language Extraction Adapters",
       "kind": "component",
-      "summary": "Defines the language adapter port and pinned Compiler API or Tree-sitter implementations that turn TypeScript, JavaScript, and C# files into independently cacheable contributions with stable owner-local references, parser diagnostics, and synthetic callback scopes for test-heavy code.",
+      "summary": "Defines pinned Compiler API and Tree-sitter adapters that turn TypeScript, JavaScript, and C# into cacheable contributions with stable references, parser diagnostics, callback scopes, callable argument ranges, observed call counts, and C# partial declaration identity.",
       "sources": [
         {
           "path": "src/ports/language-adapter.ts",
@@ -285,7 +293,9 @@
         "tree-sitter",
         "adapter",
         "structural",
-        "callback"
+        "callback",
+        "arity",
+        "partial"
       ],
       "status": "approved",
       "locked": true
@@ -294,7 +304,7 @@
       "id": "mcp-agent-adapter",
       "name": "MCP Agent Adapter",
       "kind": "subsystem",
-      "summary": "Exposes 22 fixed-repository Agent tools and three resources for AI bootstrap, curated graph maintenance, automatically repaired structural reads, natural-language symbol discovery, bounded source retrieval, review state, audits, and validation-token graph writes.",
+      "summary": "Exposes 23 fixed-repository Agent tools and three resources for AI bootstrap, compact ask retrieval, exact structural reads, review state, audits, and graph writes guarded against changed graph, patch, or selected review entries.",
       "sources": [
         {
           "path": "src/mcp/server.ts",
@@ -322,7 +332,9 @@
         "agent",
         "adapter",
         "integration",
-        "retrieval"
+        "retrieval",
+        "ask",
+        "concurrency"
       ],
       "status": "approved",
       "locked": true
@@ -331,7 +343,7 @@
       "id": "repository-infrastructure",
       "name": "Repository Infrastructure",
       "kind": "subsystem",
-      "summary": "Owns Git-aware discovery and delta probes, stat-assisted exact hashing, validated persistence, parsed graph caching, verified source caching, project layout, and disposable local-state boundaries.",
+      "summary": "Owns Git-aware discovery and delta probes, stat-assisted exact hashing, BOM-aware source decoding, validated persistence, parsed graph caching, verified source caching, project layout, and disposable local-state boundaries.",
       "sources": [
         {
           "path": "src/infrastructure/repository-scanner.ts",
@@ -343,6 +355,10 @@
         },
         {
           "path": "src/infrastructure/source-cache.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/infrastructure/text-decoder.ts",
           "role": "primary"
         },
         {
@@ -367,7 +383,8 @@
         "repository",
         "persistence",
         "cache",
-        "git"
+        "git",
+        "encoding"
       ],
       "status": "approved",
       "locked": true
@@ -422,7 +439,7 @@
       "id": "structural-index-engine",
       "name": "Structural Index Engine",
       "kind": "subsystem",
-      "summary": "Maintains cached per-file structural contributions, repairs source deltas automatically, re-resolves only changed and definition-name-affected files, exposes resolution quality metrics, and serves symbol-aware grep, bounded source bodies, natural-language symbol search, and reference traces.",
+      "summary": "Maintains cached per-file structural contributions, precise delta propagation, arity and partial-type resolution, IDF and intent-aware ranking, exact grep and trace, and one-call ask with compact query-aware cruxes or explicit full bodies.",
       "sources": [
         {
           "path": "src/domain/structural.ts",
@@ -459,6 +476,14 @@
         {
           "path": "docs/adr/0009-live-structural-query-runtime.md",
           "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0010-call-arity-resolution.md",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0011-partial-type-resolution.md",
+          "role": "supporting"
         }
       ],
       "tags": [
@@ -467,8 +492,13 @@
         "grep",
         "trace",
         "search",
+        "ask",
+        "idf",
+        "crux",
         "cache",
-        "incremental"
+        "incremental",
+        "overload",
+        "partial"
       ],
       "status": "approved",
       "locked": true
@@ -477,7 +507,7 @@
       "id": "verification-suite",
       "name": "Verification Suite",
       "kind": "component",
-      "summary": "Verifies AI bootstrap and graph integrity plus Git discovery, exact forced hashing, TypeScript callback attribution, stable reference identity, C# ambiguity metrics, affected-file resolution, automatic stale repair, source context, ranked truncation, natural-language symbol search, trace suggestions, and the full MCP workflow.",
+      "summary": "Verifies lifecycle and graph integrity, selected-review token concurrency, provenance severities, IDF and test-intent ranking, compact query-aware ask cruxes, C# resolution, stale repair, and the complete MCP workflow.",
       "sources": [
         {
           "path": "test/agent-bootstrap.test.ts",
@@ -535,7 +565,11 @@
         "structural",
         "csharp",
         "ai-bootstrap",
-        "incremental"
+        "incremental",
+        "encoding",
+        "ask",
+        "concurrency",
+        "ranking"
       ],
       "status": "approved",
       "locked": false

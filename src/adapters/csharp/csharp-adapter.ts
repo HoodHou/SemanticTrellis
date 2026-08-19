@@ -3,6 +3,7 @@ import { parse, type SgNode } from "@ast-grep/napi";
 import type {
   FileContribution,
   SourceSpan,
+  StructuralCallArity,
   StructuralDiagnostic,
   StructuralReference,
   StructuralReferenceKind,
@@ -12,7 +13,7 @@ import type {
 import type { LanguageAdapter, LanguageExtractionInput } from "../../ports/language-adapter.js";
 import { ensureAstGrepLanguages } from "../ast-grep-runtime.js";
 
-const VERSION = "ast-grep-napi-0.45.1-csharp-0.0.6-v2";
+const VERSION = "ast-grep-napi-0.45.1-csharp-0.0.6-v4";
 const EXTENSIONS = new Set([".cs"]);
 
 interface DeclarationCandidate {
@@ -94,6 +95,37 @@ function spanOf(node: SgNode): SourceSpan {
     endLine: range.end.line + 1,
     endColumn: range.end.column + 1,
   };
+}
+
+function listItemCount(node: SgNode): number {
+  if (!node.children().some((child) => child.isNamed())) return 0;
+  return node.children().filter((child) => child.kind() === ",").length + 1;
+}
+
+function callArityOf(node: SgNode): StructuralCallArity | null {
+  const parameters = safeField(node, "parameters");
+  if (parameters === null) return null;
+  const total = listItemCount(parameters);
+  const optional = parameters.children().filter(
+    (child) => child.kind() === "parameter" &&
+      child.children().some((part) => part.kind() === "="),
+  ).length;
+  const variadic = parameters.children().some((child) => child.kind() === "params");
+  return {
+    min: Math.max(0, total - optional - (variadic ? 1 : 0)),
+    max: variadic ? null : total,
+  };
+}
+
+function argumentCountOf(node: SgNode): number | null {
+  const argumentsNode = safeField(node, "arguments");
+  return argumentsNode === null ? null : listItemCount(argumentsNode);
+}
+
+function isPartialDeclaration(node: SgNode): boolean {
+  return node.children().some(
+    (child) => child.kind() === "modifier" && child.text().trim() === "partial",
+  );
 }
 
 function nameField(node: SgNode): string | null {
@@ -221,6 +253,8 @@ function buildSymbols(
       span: spanOf(candidate.node),
       signature: signatureOf(candidate.signatureNode),
       parentId: parent?.symbol.id ?? fileSymbol.id,
+      callArity: callArityOf(candidate.signatureNode),
+      partial: isPartialDeclaration(candidate.signatureNode),
     };
     symbols.push(symbol);
     if (candidate.opensScope) {
@@ -335,6 +369,7 @@ function referenceRecord(
   kind: StructuralReferenceKind,
   targetName: string,
   targetQualifier: string | null,
+  argumentCount: number | null,
   ordinal: number,
 ): StructuralReference {
   const position = node.range().start;
@@ -347,6 +382,7 @@ function referenceRecord(
     kind,
     targetName,
     targetQualifier,
+    argumentCount,
     line,
     column,
   };
@@ -398,6 +434,7 @@ function buildReferences(
         "call",
         target.name,
         target.qualifier,
+        argumentCountOf(candidate.node),
         ordinal(owner.id, "call", target.name),
       ));
       continue;
@@ -413,6 +450,7 @@ function buildReferences(
         "construct",
         name,
         normalizedQualifier(type),
+        argumentCountOf(candidate.node),
         ordinal(owner.id, "construct", name),
       ));
       continue;
@@ -428,6 +466,7 @@ function buildReferences(
         "import",
         simpleNameFromText(normalized) ?? normalized,
         normalized,
+        null,
         ordinal(fileSymbol.id, "import", simpleNameFromText(normalized) ?? normalized),
       ));
       continue;
@@ -442,6 +481,7 @@ function buildReferences(
       baseReferenceKind(owner, candidate.baseIndex ?? 0),
       name,
       normalizedQualifier(text),
+      null,
       ordinal(
         owner.id,
         baseReferenceKind(owner, candidate.baseIndex ?? 0),
@@ -488,6 +528,8 @@ export class CSharpLanguageAdapter implements LanguageAdapter {
       },
       signature: input.path,
       parentId: null,
+      callArity: null,
+      partial: false,
     };
     const built = buildSymbols(input.path, fileSymbol, collectDeclarations(root));
     return {

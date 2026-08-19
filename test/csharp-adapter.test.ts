@@ -90,6 +90,10 @@ namespace Game.Core
         }),
       ]),
     );
+    expect(run?.callArity).toEqual({ min: 1, max: 1 });
+    expect(
+      contribution.references.find((reference) => reference.targetName === "Helper")?.argumentCount,
+    ).toBe(1);
   });
 
   it("resolves calls within the owning type before falling back to global names", () => {
@@ -197,5 +201,65 @@ namespace Game.Core
       ambiguousReferences: 1,
       unresolvedReferences: 0,
     });
+  });
+
+  it("resolves overloads when their accepted argument counts differ", () => {
+    const contribution = new CSharpLanguageAdapter().extract({
+      path: "Assets/Scripts/Arity.cs",
+      hash: "arity",
+      source: `class Arity {
+        void Run() { Execute(1, 2); }
+        void Execute(int value) {}
+        void Execute(int left, int right) {}
+      }`,
+    });
+
+    const resolved = resolveStructuralGraph({ [contribution.path]: contribution });
+    const twoArguments = contribution.symbols.find(
+      (symbol) => symbol.name === "Execute" && symbol.callArity?.min === 2,
+    );
+    expect(resolved.metrics).toMatchObject({
+      resolvedReferences: 1,
+      ambiguousReferences: 0,
+    });
+    expect(resolved.edges[0]?.to).toBe(twoArguments?.id);
+  });
+
+  it("coalesces equivalent partial type declarations without merging namespaces", () => {
+    const adapter = new CSharpLanguageAdapter();
+    const first = adapter.extract({
+      path: "Assets/Scripts/PartialA.cs",
+      hash: "partial-a",
+      source: "namespace Game { public partial class Shared {} }",
+    });
+    const second = adapter.extract({
+      path: "Assets/Scripts/PartialB.cs",
+      hash: "partial-b",
+      source: "namespace Game { public partial class Shared {} }",
+    });
+    const caller = adapter.extract({
+      path: "Assets/Scripts/Caller.cs",
+      hash: "caller",
+      source: "namespace Game { class Caller { void Run() { _ = new Shared(); } } }",
+    });
+
+    const resolved = resolveStructuralGraph({
+      [first.path]: first,
+      [second.path]: second,
+      [caller.path]: caller,
+    });
+    expect(first.symbols.find((symbol) => symbol.qualifiedName === "Game.Shared")?.partial).toBe(
+      true,
+    );
+    expect(resolved.metrics).toMatchObject({
+      resolvedReferences: 1,
+      ambiguousReferences: 0,
+    });
+    expect(resolved.edges[0]?.to).toBe(
+      [
+        first.symbols.find((symbol) => symbol.qualifiedName === "Game.Shared")?.id,
+        second.symbols.find((symbol) => symbol.qualifiedName === "Game.Shared")?.id,
+      ].sort()[0],
+    );
   });
 });

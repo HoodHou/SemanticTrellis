@@ -3,6 +3,7 @@ import * as ts from "typescript-compiler";
 import type {
   FileContribution,
   SourceSpan,
+  StructuralCallArity,
   StructuralDiagnostic,
   StructuralReference,
   StructuralReferenceKind,
@@ -11,7 +12,7 @@ import type {
 } from "../../domain/structural.js";
 import type { LanguageAdapter, LanguageExtractionInput } from "../../ports/language-adapter.js";
 
-const VERSION = `typescript-compiler-${ts.version}-v2`;
+const VERSION = `typescript-compiler-${ts.version}-v4`;
 const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 interface Scope {
@@ -139,6 +140,42 @@ function spanOf(node: ts.Node, file: ts.SourceFile): SourceSpan {
   };
 }
 
+function callableParameters(node: ts.Node): readonly ts.ParameterDeclaration[] | null {
+  if (ts.isVariableDeclaration(node)) {
+    const initializer = node.initializer;
+    return initializer !== undefined &&
+      (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+      ? initializer.parameters
+      : null;
+  }
+  if (
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isMethodSignature(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node) ||
+    ts.isConstructorDeclaration(node)
+  ) {
+    return node.parameters;
+  }
+  return null;
+}
+
+function callArityOf(node: ts.Node): StructuralCallArity | null {
+  const parameters = callableParameters(node);
+  if (parameters === null) return null;
+  const variadic = parameters.some((parameter) => parameter.dotDotDotToken !== undefined);
+  const min = parameters.filter(
+    (parameter) =>
+      parameter.dotDotDotToken === undefined &&
+      parameter.questionToken === undefined &&
+      parameter.initializer === undefined,
+  ).length;
+  return { min, max: variadic ? null : parameters.length };
+}
+
 function signatureOf(node: ts.Node, file: ts.SourceFile): string {
   const text = node.getText(file);
   const bodyStart = text.search(/=>|\{/);
@@ -186,6 +223,7 @@ function reference(
   kind: StructuralReferenceKind,
   targetName: string,
   targetQualifier: string | null,
+  argumentCount: number | null,
   ordinal: number,
 ): StructuralReference {
   const position = referencePosition(node, file);
@@ -196,6 +234,7 @@ function reference(
     kind,
     targetName,
     targetQualifier,
+    argumentCount,
     ...position,
   };
 }
@@ -223,6 +262,8 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
       span: { startLine: 1, startColumn: 1, endLine: lineCount, endColumn: 1 },
       signature: input.path,
       parentId: null,
+      callArity: null,
+      partial: false,
     };
     const symbols: StructuralSymbol[] = [fileSymbol];
     const references: StructuralReference[] = [];
@@ -258,6 +299,8 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
           span: spanOf(node, file),
           signature: signatureOf(node, file),
           parentId: scope.ownerSymbolId,
+          callArity: callArityOf(node),
+          partial: false,
         });
         if (found.opensScope) {
           childScope = { names: [...scope.names, found.name], ownerSymbolId: id };
@@ -274,6 +317,7 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
           "call",
           target.name,
           target.qualifier,
+          node.arguments.length,
           referenceOrdinal(childScope.ownerSymbolId, "call", target.name),
         ));
       } else if (ts.isNewExpression(node)) {
@@ -286,6 +330,7 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
           "construct",
           target.name,
           target.qualifier,
+          node.arguments?.length ?? 0,
           referenceOrdinal(childScope.ownerSymbolId, "construct", target.name),
         ));
       } else if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
@@ -297,6 +342,7 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
           "import",
           node.moduleSpecifier.text,
           node.moduleSpecifier.text,
+          null,
           referenceOrdinal(fileSymbol.id, "import", node.moduleSpecifier.text),
         ));
       } else if (ts.isHeritageClause(node)) {
@@ -313,6 +359,7 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
             kind,
             target.name,
             target.qualifier,
+            null,
             referenceOrdinal(childScope.ownerSymbolId, kind, target.name),
           ));
         }

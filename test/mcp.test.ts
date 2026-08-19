@@ -51,6 +51,7 @@ describe("MCP server", () => {
           "semantic_trellis_file_symbols",
           "semantic_trellis_trace",
           "semantic_trellis_symbol_search",
+          "semantic_trellis_ask",
           "semantic_trellis_bootstrap_preview",
           "semantic_trellis_bootstrap_start",
           "semantic_trellis_bootstrap_status",
@@ -332,6 +333,33 @@ describe("MCP server", () => {
           expect.objectContaining({ symbol: expect.objectContaining({ name: "value" }) }),
         ]),
       });
+
+      const scopedMiss = await client.callTool({
+        name: "semantic_trellis_symbol_search",
+        arguments: { query: "fixture value", pathPrefix: "other" },
+      });
+      expect(scopedMiss.structuredContent).toMatchObject({ hits: [] });
+
+      const ask = await client.callTool({
+        name: "semantic_trellis_ask",
+        arguments: { query: "fixture value", includeBody: true },
+      });
+      expect(ask.isError).not.toBe(true);
+      expect(ask.structuredContent).toMatchObject({
+        hits: expect.arrayContaining([
+          expect.objectContaining({ symbol: expect.objectContaining({ name: "value" }) }),
+        ]),
+        sourceContexts: expect.arrayContaining([
+          expect.objectContaining({
+            context: expect.objectContaining({ text: expect.stringContaining("export const value") }),
+          }),
+        ]),
+      });
+      expect(
+        (ask.structuredContent?.hits as Array<{ symbol: { kind: string } }>).every(
+          (hit) => hit.symbol.kind !== "file",
+        ),
+      ).toBe(true);
 
       const search = await client.callTool({
         name: "semantic_trellis_search",

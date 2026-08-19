@@ -58,13 +58,32 @@ function validTarget(reference: StructuralReference, symbol: StructuralSymbol): 
   }
 }
 
+function acceptsArguments(reference: StructuralReference, symbol: StructuralSymbol): boolean {
+  if (reference.argumentCount === null || symbol.callArity === null) return true;
+  return reference.argumentCount >= symbol.callArity.min &&
+    (symbol.callArity.max === null || reference.argumentCount <= symbol.callArity.max);
+}
+
 interface Selection {
   target: StructuralSymbol | null;
   ambiguous: boolean;
 }
 
 function selectUnique(reference: StructuralReference, values: StructuralSymbol[]): Selection {
-  const allowed = values.filter((symbol) => validTarget(reference, symbol));
+  const allowed = values.filter(
+    (symbol) => validTarget(reference, symbol) && acceptsArguments(reference, symbol),
+  );
+  if (allowed.length > 1 && allowed.every((symbol) => symbol.partial)) {
+    const identities = new Set(
+      allowed.map((symbol) => `${symbol.kind}:${symbol.qualifiedName}`),
+    );
+    if (identities.size === 1) {
+      return {
+        target: [...allowed].sort((left, right) => left.id.localeCompare(right.id))[0] ?? null,
+        ambiguous: false,
+      };
+    }
+  }
   return {
     target: allowed.length === 1 ? allowed[0] ?? null : null,
     ambiguous: allowed.length > 1,

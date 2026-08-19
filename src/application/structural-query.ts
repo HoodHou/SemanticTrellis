@@ -12,6 +12,8 @@ import { ensureStructuralIndex } from "./structure.js";
 export interface StructuralSourceOptions {
   includeBody?: boolean;
   maxSourceCharacters?: number;
+  maxLinesPerSymbol?: number | undefined;
+  query?: string | undefined;
   repairStale?: boolean;
 }
 
@@ -38,11 +40,52 @@ function contextForSymbol(
   source: string,
   symbol: StructuralSymbol,
   remainingCharacters: number,
+  maxLinesPerSymbol?: number,
+  query?: string,
 ): { value: StructuralSymbolSource | null; used: number } {
   if (remainingCharacters <= 0) return { value: null, used: 0 };
   const lines = source.split(/\r?\n/);
-  const startLine = Math.max(1, symbol.span.startLine);
-  const endLine = Math.min(lines.length, Math.max(startLine, symbol.span.endLine));
+  const symbolStartLine = Math.max(1, symbol.span.startLine);
+  const symbolEndLine = Math.min(
+    lines.length,
+    Math.max(symbolStartLine, symbol.span.endLine),
+  );
+  let startLine = symbolStartLine;
+  let endLine = symbolEndLine;
+  const lineLimit = maxLinesPerSymbol === undefined
+    ? null
+    : Math.max(1, Math.min(200, Math.floor(maxLinesPerSymbol)));
+  if (lineLimit !== null && symbolEndLine - symbolStartLine + 1 > lineLimit) {
+    const rawQuery = query?.trim() ?? "";
+    const normalizedQuery = rawQuery.toLowerCase();
+    const terms = [...new Set(
+      rawQuery
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}_]+/u)
+        .filter((term) => term.length >= 3),
+    )];
+    let bestOffset = 0;
+    let bestScore = 0;
+    for (let offset = 0; offset <= symbolEndLine - symbolStartLine; offset += 1) {
+      const text = (lines[symbolStartLine - 1 + offset] ?? "").toLowerCase();
+      let score = normalizedQuery.length > 0 && text.includes(normalizedQuery) ? 1_000 : 0;
+      for (const term of terms) {
+        if (text.includes(term)) score += term.length;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestOffset = offset;
+      }
+    }
+    const maximumStartOffset = symbolEndLine - symbolStartLine + 1 - lineLimit;
+    const startOffset = Math.max(
+      0,
+      Math.min(maximumStartOffset, bestOffset - Math.floor(lineLimit / 2)),
+    );
+    startLine = symbolStartLine + startOffset;
+    endLine = startLine + lineLimit - 1;
+  }
   const complete = lines.slice(startLine - 1, endLine).join("\n");
   const text = complete.slice(0, remainingCharacters);
   return {
@@ -53,14 +96,17 @@ function contextForSymbol(
         startLine,
         endLine,
         text,
-        truncated: text.length < complete.length,
+        truncated:
+          startLine !== symbolStartLine ||
+          endLine !== symbolEndLine ||
+          text.length < complete.length,
       },
     },
     used: text.length,
   };
 }
 
-async function sourceContexts(
+export async function getSymbolSourceContexts(
   root: string,
   symbols: StructuralSymbol[],
   options: StructuralSourceOptions,
@@ -82,7 +128,13 @@ async function sourceContexts(
       source = await readVerifiedSource(root, symbol.path, hash);
       sources.set(symbol.path, source);
     }
-    const taken = contextForSymbol(source, symbol, remaining);
+    const taken = contextForSymbol(
+      source,
+      symbol,
+      remaining,
+      options.maxLinesPerSymbol,
+      options.query,
+    );
     if (taken.value !== null) output.push(taken.value);
     remaining -= taken.used;
   }
@@ -105,7 +157,7 @@ export async function getFileSymbols(
   return {
     file,
     symbols,
-    sourceContexts: await sourceContexts(root, symbols, options, hashes),
+    sourceContexts: await getSymbolSourceContexts(root, symbols, options, hashes),
     build: built.metrics,
   };
 }
@@ -125,7 +177,7 @@ export async function traceProjectStructure(
   );
   return {
     trace,
-    sourceContexts: await sourceContexts(root, trace.symbols, options, hashes),
+    sourceContexts: await getSymbolSourceContexts(root, trace.symbols, options, hashes),
     build: built.metrics,
   };
 }

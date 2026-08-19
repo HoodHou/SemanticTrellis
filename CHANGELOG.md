@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.7.0 - 2026-08-19
+
+### Fixed
+
+- Definition-impact propagation now compares resolution-relevant symbol identity
+  sets, so implementation-only edits re-resolve only their changed file.
+- Source decoding recognizes UTF-8, UTF-16LE, and UTF-16BE byte-order marks for
+  structural extraction, verified source reads, and Agent bootstrap chunks.
+- Curation tokens bind the exact review entries selected by `mark-reviewed`, so
+  a newer same-path delta cannot be cleared by an older approval.
+
+### Added
+
+- One-call natural-language `ask` retrieval for CLI and MCP with path scoping,
+  ranked symbols, curated attribution, and bounded verified source bodies.
+- Conservative call-arity metadata and overload filtering for TypeScript,
+  JavaScript, and C# structural resolution.
+- Conservative coalescing of same-kind, same-qualified-name C# partial type
+  declarations during reference resolution.
+
+### Changed
+
+- Natural-language symbol ranking uses query-local IDF and weighted term
+  coverage instead of fixed common-word scoring alone, adds a small callable
+  prior, and de-emphasizes test paths unless the query expresses test intent.
+- `ask` defaults to a clean top-4 and query-aware eight-line cruxes under a 4k
+  source budget; full bodies remain available explicitly.
+
 ## 0.6.0 - 2026-08-18
 
 ### Added

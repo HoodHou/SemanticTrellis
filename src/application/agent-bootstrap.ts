@@ -18,6 +18,7 @@ import { loadAgentBootstrapSession, saveAgentBootstrapSession } from "../infrast
 import { loadConfig, loadGraph, loadSnapshot } from "../infrastructure/project-store.js";
 import { scanRepositoryDetailed } from "../infrastructure/repository-scanner.js";
 import { loadStructuralIndex } from "../infrastructure/structural-store.js";
+import { decodeSourceText } from "../infrastructure/text-decoder.js";
 import { buildStructuralIndex } from "./structure.js";
 import { bootstrapProject } from "./bootstrap.js";
 import { syncProject } from "./sync.js";
@@ -91,6 +92,8 @@ export interface BootstrapFileRollup {
       signature: string;
       startLine: number;
       endLine: number;
+      callArity: { min: number; max: number | null } | null;
+      partial: boolean;
     }>;
     references: Array<{
       kind: string;
@@ -183,7 +186,7 @@ async function readFrozenSource(root: string, path: string, expectedHash: string
       `Source changed after the bootstrap snapshot: ${path}. Start or resume bootstrap again.`,
     );
   }
-  return bytes.toString("utf8");
+  return decodeSourceText(bytes);
 }
 
 async function requireSession(root: string): Promise<AgentBootstrapSession> {
@@ -419,6 +422,8 @@ export async function getNextBootstrapRollups(
           signature: symbol.signature,
           startLine: symbol.span.startLine,
           endLine: symbol.span.endLine,
+          callArity: symbol.callArity,
+          partial: symbol.partial,
         })),
         references: (contribution?.references ?? []).map((reference) => ({
           kind: reference.kind,

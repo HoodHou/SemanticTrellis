@@ -164,6 +164,7 @@ export const validationOutputSchema = z.object({
   reviewedPaths: z.array(z.string()),
   warnings: z.number().int().nonnegative(),
   information: z.number().int().nonnegative(),
+  reviewStateDigest: z.string().length(64),
 });
 
 export const applyOutputSchema = z.object({
@@ -209,6 +210,11 @@ export const structuralSymbolSchema = z.object({
   span: sourceSpanSchema,
   signature: z.string(),
   parentId: z.string().nullable(),
+  callArity: z.object({
+    min: z.number().int().nonnegative(),
+    max: z.number().int().nonnegative().nullable(),
+  }).nullable(),
+  partial: z.boolean(),
 });
 
 export const structuralEdgeSchema = z.object({
@@ -320,6 +326,10 @@ export const structuralSymbolSearchOutputSchema = z.object({
     curatedNodeIds: z.array(z.string()),
   })),
   build: structuralBuildMetricsSchema,
+});
+
+export const structuralAskOutputSchema = structuralSymbolSearchOutputSchema.extend({
+  sourceContexts: z.array(structuralSymbolSourceSchema),
 });
 
 export const agentBootstrapStatusSchema = z.object({

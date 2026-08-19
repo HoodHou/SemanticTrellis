@@ -3,14 +3,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  applyValidatedCurationPatch,
   auditProject,
   bootstrapProject,
   curateProject,
   initializeProject,
   projectStatus,
   syncProject,
+  validateCurationPatch,
 } from "../src/application/index.js";
-import { SCHEMA_VERSION, type GraphPatch } from "../src/domain/model.js";
+import { SCHEMA_VERSION, type GraphPatch, type ReviewItem } from "../src/domain/model.js";
+import {
+  loadReviewQueue,
+  saveReviewQueue,
+} from "../src/infrastructure/project-store.js";
 
 const temporaryRoots: string[] = [];
 
@@ -109,5 +115,67 @@ describe("project workflow", () => {
 
     const gitignore = await readFile(join(root, ".gitignore"), "utf8");
     expect(gitignore).toContain("/.semantic-trellis/local/");
+  });
+
+  it("invalidates curation tokens only when selected review entries change", async () => {
+    const root = await temporaryProject();
+    await initializeProject(root);
+    await bootstrapProject(root);
+    const patch: GraphPatch = {
+      schemaVersion: SCHEMA_VERSION,
+      operations: [
+        {
+          op: "upsert-node",
+          node: {
+            id: "entry",
+            name: "Entry",
+            kind: "system",
+            summary: "Owns the entry source.",
+            sources: [{ path: "src/index.ts", role: "primary" }],
+            tags: ["entry"],
+            status: "approved",
+            locked: false,
+          },
+        },
+        { op: "mark-reviewed", paths: ["src/index.ts"] },
+      ],
+    };
+    const validation = await validateCurationPatch(root, patch);
+    expect(validation.reviewStateDigest).toHaveLength(64);
+    const originalQueue = await loadReviewQueue(root);
+    const selected = originalQueue.items[0];
+    expect(selected).toBeDefined();
+    await saveReviewQueue(root, {
+      schemaVersion: SCHEMA_VERSION,
+      items: [{
+        ...selected!,
+        id: `changed:${selected!.path}:${"f".repeat(64)}`,
+        changeKind: "changed",
+        reason: "source-changed",
+        beforeHash: selected!.afterHash,
+        afterHash: "f".repeat(64),
+      }],
+    });
+
+    await expect(
+      applyValidatedCurationPatch(root, patch, validation.validationToken),
+    ).rejects.toThrow(/reviewed queue entries changed/);
+
+    const unrelated: ReviewItem = {
+      id: `added:src/unrelated.ts:${"a".repeat(64)}`,
+      path: "src/unrelated.ts",
+      changeKind: "added",
+      reason: "source-added",
+      beforeHash: null,
+      afterHash: "a".repeat(64),
+      relatedNodeIds: [],
+    };
+    await saveReviewQueue(root, {
+      schemaVersion: SCHEMA_VERSION,
+      items: [...originalQueue.items, unrelated],
+    });
+    await expect(
+      applyValidatedCurationPatch(root, patch, validation.validationToken),
+    ).resolves.toMatchObject({ reviewedPaths: 1, pendingReviews: 1 });
   });
 });

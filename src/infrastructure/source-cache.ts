@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { digestBytes } from "./digest.js";
+import { decodeSourceText } from "./text-decoder.js";
 
 interface CachedSource {
   hash: string;
@@ -47,7 +48,7 @@ export async function readVerifiedSource(
     sourceCache.delete(absolutePath);
     throw new SourceHashMismatchError(path, expectedHash, actualHash);
   }
-  const source = bytes.toString("utf8");
+  const source = decodeSourceText(bytes);
   sourceCache.set(absolutePath, {
     hash: actualHash,
     size: fileStat.size,

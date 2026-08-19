@@ -41,6 +41,7 @@
       ".vscode",
       "Library",
       "Temp",
+      "benchmarks",
       "build",
       "coverage",
       "dist",
