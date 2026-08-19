@@ -3,6 +3,8 @@ import type {
   StructuralEdge,
   StructuralIndex,
   StructuralSymbol,
+  StructuralSymbolSearchHit,
+  StructuralSymbolSuggestion,
   StructuralTrace,
   TraceDirection,
 } from "../domain/structural.js";
@@ -42,6 +44,97 @@ export function resolveSymbolQuery(index: StructuralIndex, query: string): Struc
   return symbols.filter((symbol) => symbol.name === query);
 }
 
+function normalizedWords(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}_]+/u)
+    .filter(Boolean);
+}
+
+function suggestionScore(symbol: StructuralSymbol, query: string): number {
+  const normalized = query.trim().toLowerCase();
+  const name = symbol.name.toLowerCase();
+  const qualifiedName = symbol.qualifiedName.toLowerCase();
+  if (name === normalized || qualifiedName === normalized) return 100;
+  if (name.startsWith(normalized)) return 70;
+  if (qualifiedName.startsWith(normalized) || qualifiedName.endsWith(`.${normalized}`)) return 60;
+  if (name.includes(normalized)) return 45;
+  if (qualifiedName.includes(normalized)) return 35;
+  const queryWords = normalizedWords(normalized);
+  const symbolWords = new Set(normalizedWords(`${symbol.name} ${symbol.qualifiedName}`));
+  return queryWords.reduce((score, word) => score + (symbolWords.has(word) ? 8 : 0), 0);
+}
+
+export function suggestStructuralSymbols(
+  index: StructuralIndex,
+  query: string,
+  limit = 5,
+): StructuralSymbolSuggestion[] {
+  return allSymbols(index)
+    .map((symbol) => ({ symbol, score: suggestionScore(symbol, query) }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score || left.symbol.id.localeCompare(right.symbol.id))
+    .slice(0, Math.max(1, Math.floor(limit)));
+}
+
+export function searchStructuralSymbols(
+  index: StructuralIndex,
+  query: string,
+  limit = 20,
+  curatedByPath: ReadonlyMap<string, readonly string[]> = new Map(),
+): StructuralSymbolSearchHit[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return [];
+  const terms = normalizedWords(normalized);
+  const inDegree = new Map<string, number>();
+  for (const edge of index.edges) inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
+  const hits: StructuralSymbolSearchHit[] = [];
+  for (const symbol of allSymbols(index)) {
+    const matchedFields = new Set<string>();
+    const name = symbol.name.toLowerCase();
+    const qualifiedName = symbol.qualifiedName.toLowerCase();
+    const signature = symbol.signature.toLowerCase();
+    const path = symbol.path.toLowerCase();
+    let score = suggestionScore(symbol, normalized);
+    if (score > 0) matchedFields.add(name.includes(normalized) ? "name" : "qualifiedName");
+    for (const term of terms) {
+      if (name.includes(term)) {
+        score += 14;
+        matchedFields.add("name");
+      }
+      if (qualifiedName.includes(term)) {
+        score += 9;
+        matchedFields.add("qualifiedName");
+      }
+      if (signature.includes(term)) {
+        score += 5;
+        matchedFields.add("signature");
+      }
+      if (path.includes(term)) {
+        score += 3;
+        matchedFields.add("path");
+      }
+    }
+    const degree = inDegree.get(symbol.id) ?? 0;
+    if (score > 0) score += Math.min(12, Math.log2(degree + 1) * 2);
+    const curatedNodeIds = [...new Set(curatedByPath.get(symbol.path) ?? [])].sort();
+    if (curatedNodeIds.length > 0 && score > 0) score += 6;
+    if (score > 0) {
+      hits.push({
+        symbol,
+        score: Number(score.toFixed(3)),
+        matchedFields: [...matchedFields].sort(),
+        inDegree: degree,
+        curatedNodeIds,
+      });
+    }
+  }
+  return hits
+    .sort((left, right) => right.score - left.score || left.symbol.id.localeCompare(right.symbol.id))
+    .slice(0, Math.max(1, Math.floor(limit)));
+}
+
 export function traceStructuralGraph(
   index: StructuralIndex,
   query: string,
@@ -49,8 +142,20 @@ export function traceStructuralGraph(
   depth = 1,
 ): StructuralTrace {
   const focus = resolveSymbolQuery(index, query);
-  if (focus.length === 0) throw new Error(`No structural symbol matches ${query}.`);
   const safeDepth = Math.max(0, Math.floor(depth));
+  if (focus.length === 0) {
+    return {
+      query,
+      direction,
+      depth: safeDepth,
+      found: false,
+      focus: [],
+      symbols: [],
+      edges: [],
+      ambiguous: false,
+      suggestions: suggestStructuralSymbols(index, query),
+    };
+  }
   const selected = new Set(focus.map((symbol) => symbol.id));
   const traversedEdgeIds = new Set<string>();
   let frontier = new Set(selected);
@@ -75,6 +180,7 @@ export function traceStructuralGraph(
     query,
     direction,
     depth: safeDepth,
+    found: true,
     focus: [...focus].sort((left, right) => left.id.localeCompare(right.id)),
     symbols: [...selected]
       .map((id) => byId.get(id))
@@ -84,6 +190,7 @@ export function traceStructuralGraph(
       .filter((edge) => traversedEdgeIds.has(edge.id))
       .sort((left, right) => left.id.localeCompare(right.id)),
     ambiguous: focus.length > 1,
+    suggestions: [],
   };
 }
 

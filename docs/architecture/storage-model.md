@@ -44,8 +44,10 @@ they require review, and which curated nodes may be affected.
 Disposable per-file structural contributions and their resolved edges. Each
 contribution is keyed by repository-relative path, source hash, language, and
 extractor version and contains symbols, unresolved references, and parser
-diagnostics. An unchanged file reuses its contribution without parsing. The
-current structural cache schema is version 2; older local indexes are discarded
+diagnostics. The index also stores repository revision/untracked state,
+per-file resolution metrics, and target-name reverse references for incremental
+edge repair. An unchanged file reuses its contribution without parsing. The
+current structural cache schema is version 5; older local indexes are discarded
 and rebuilt.
 
 ### `.semantic-trellis/local/agent-bootstrap.json`
@@ -57,6 +59,12 @@ this file; it is reread from the frozen hash when an approved Agent asks for a
 batch.
 
 Local files are ignored by Git and are never authoritative.
+
+Only the four runtime documents above should persist between normal sessions.
+One-off probes, temporary MCP callers, and applied patch payloads belong in a
+temporary workspace and should be removed after handoff. Durable curation
+history is the versioned graph and Git history, not an accumulation of helper
+files under `local/`.
 
 ## Stable identity
 

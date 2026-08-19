@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CSharpLanguageAdapter } from "../src/adapters/csharp/csharp-adapter.js";
-import { resolveStructuralEdges } from "../src/structural/resolver.js";
+import { resolveStructuralEdges, resolveStructuralGraph } from "../src/structural/resolver.js";
 import { createDefaultLanguageRegistry } from "../src/structural/registry.js";
 
 describe("C# language adapter", () => {
@@ -178,5 +178,24 @@ namespace Game.Core
         expect.objectContaining({ code: "csharp-parse-error", path: "Assets/Scripts/Broken.cs" }),
       ]),
     );
+  });
+
+  it("reports unresolved overload ambiguity instead of silently dropping it", () => {
+    const contribution = new CSharpLanguageAdapter().extract({
+      path: "Assets/Scripts/Overloads.cs",
+      hash: "overloads",
+      source: `class Overloads {
+        void Run() { Execute(1); }
+        void Execute(int value) {}
+        void Execute(string value) {}
+      }`,
+    });
+
+    const resolved = resolveStructuralGraph({ [contribution.path]: contribution });
+    expect(resolved.metrics).toMatchObject({
+      resolvedReferences: 0,
+      ambiguousReferences: 1,
+      unresolvedReferences: 0,
+    });
   });
 });

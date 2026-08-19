@@ -78,6 +78,7 @@ export interface FileRecord {
   path: string;
   hash: string;
   size: number;
+  mtimeMs?: number | undefined;
 }
 
 export interface RepositorySnapshot {

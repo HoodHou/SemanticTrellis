@@ -4,6 +4,7 @@ import type {
   StructuralEdge,
   StructuralIndex,
   StructuralReference,
+  StructuralResolutionMetrics,
   StructuralSymbol,
 } from "../domain/structural.js";
 
@@ -57,9 +58,17 @@ function validTarget(reference: StructuralReference, symbol: StructuralSymbol): 
   }
 }
 
-function unique(reference: StructuralReference, values: StructuralSymbol[]): StructuralSymbol | null {
+interface Selection {
+  target: StructuralSymbol | null;
+  ambiguous: boolean;
+}
+
+function selectUnique(reference: StructuralReference, values: StructuralSymbol[]): Selection {
   const allowed = values.filter((symbol) => validTarget(reference, symbol));
-  return allowed.length === 1 ? allowed[0] ?? null : null;
+  return {
+    target: allowed.length === 1 ? allowed[0] ?? null : null,
+    ambiguous: allowed.length > 1,
+  };
 }
 
 function qualifierSuffixes(qualifiedName: string): string[] {
@@ -75,17 +84,19 @@ function scopedTarget(
   reference: StructuralReference,
   byId: Map<string, StructuralSymbol>,
   byQualifiedName: Map<string, StructuralSymbol[]>,
-): StructuralSymbol | null {
+): Selection {
   let scope = byId.get(reference.ownerSymbolId);
+  let ambiguous = false;
   while (scope !== undefined) {
-    const target = unique(
+    const selected = selectUnique(
       reference,
       byQualifiedName.get(`${scope.qualifiedName}.${reference.targetName}`) ?? [],
     );
-    if (target !== null) return target;
+    if (selected.target !== null) return { target: selected.target, ambiguous: false };
+    ambiguous ||= selected.ambiguous;
     scope = scope.parentId === null ? undefined : byId.get(scope.parentId);
   }
-  return null;
+  return { target: null, ambiguous };
 }
 
 function moduleCandidates(sourcePath: string, target: string): string[] {
@@ -116,9 +127,16 @@ function resolveImport(
   return null;
 }
 
-export function resolveStructuralEdges(
+export interface StructuralResolutionResult {
+  edges: StructuralEdge[];
+  metrics: StructuralResolutionMetrics;
+  metricsByFile: Record<string, StructuralResolutionMetrics>;
+}
+
+export function resolveStructuralGraph(
   contributions: Record<string, FileContribution>,
-): StructuralEdge[] {
+  paths?: ReadonlySet<string>,
+): StructuralResolutionResult {
   const byName = new Map<string, StructuralSymbol[]>();
   const byQualifiedName = new Map<string, StructuralSymbol[]>();
   const byQualifiedSuffix = new Map<string, StructuralSymbol[]>();
@@ -136,15 +154,31 @@ export function resolveStructuralEdges(
   }
 
   const edges = new Map<string, StructuralEdge>();
+  const metricsByFile: Record<string, StructuralResolutionMetrics> = {};
   for (const contribution of Object.values(contributions)) {
+    if (paths !== undefined && !paths.has(contribution.path)) continue;
+    const fileMetrics: StructuralResolutionMetrics = {
+      resolvedReferences: 0,
+      unresolvedReferences: 0,
+      ambiguousReferences: 0,
+      unknownReceiverReferences: 0,
+    };
     for (const reference of contribution.references) {
       let target: StructuralSymbol | null = null;
+      let ambiguous = false;
       if (reference.kind === "import") {
         target = resolveImport(reference, contributions);
       }
       if (target === null && reference.targetQualifier !== null) {
-        target = unique(reference, byQualifiedName.get(reference.targetQualifier) ?? []) ??
-          unique(reference, byQualifiedSuffix.get(reference.targetQualifier) ?? []);
+        const exact = selectUnique(
+          reference,
+          byQualifiedName.get(reference.targetQualifier) ?? [],
+        );
+        const suffix = exact.target === null
+          ? selectUnique(reference, byQualifiedSuffix.get(reference.targetQualifier) ?? [])
+          : { target: null, ambiguous: false };
+        target = exact.target ?? suffix.target;
+        ambiguous ||= exact.ambiguous || suffix.ambiguous;
       }
       const qualifier = reference.targetQualifier;
       const explicitlyScoped = qualifier?.startsWith("this.") === true ||
@@ -154,12 +188,22 @@ export function resolveStructuralEdges(
         qualifier.includes(".") &&
         !explicitlyScoped;
       if (target === null && !hasUnknownReceiver) {
-        target = scopedTarget(reference, byId, byQualifiedName);
+        const scoped = scopedTarget(reference, byId, byQualifiedName);
+        target = scoped.target;
+        ambiguous ||= scoped.ambiguous;
       }
       if (target === null && !hasUnknownReceiver) {
-        target = unique(reference, byName.get(reference.targetName) ?? []);
+        const named = selectUnique(reference, byName.get(reference.targetName) ?? []);
+        target = named.target;
+        ambiguous ||= named.ambiguous;
       }
-      if (target === null) continue;
+      if (target === null) {
+        if (ambiguous) fileMetrics.ambiguousReferences += 1;
+        else fileMetrics.unresolvedReferences += 1;
+        if (hasUnknownReceiver) fileMetrics.unknownReceiverReferences += 1;
+        continue;
+      }
+      fileMetrics.resolvedReferences += 1;
       const id = `${reference.ownerSymbolId}|${reference.kind}|${target.id}|${reference.id}`;
       edges.set(id, {
         id,
@@ -169,8 +213,34 @@ export function resolveStructuralEdges(
         referenceId: reference.id,
       });
     }
+    metricsByFile[contribution.path] = fileMetrics;
   }
-  return [...edges.values()].sort((left, right) => left.id.localeCompare(right.id));
+  const metrics = Object.values(metricsByFile).reduce<StructuralResolutionMetrics>(
+    (total, value) => ({
+      resolvedReferences: total.resolvedReferences + value.resolvedReferences,
+      unresolvedReferences: total.unresolvedReferences + value.unresolvedReferences,
+      ambiguousReferences: total.ambiguousReferences + value.ambiguousReferences,
+      unknownReceiverReferences:
+        total.unknownReceiverReferences + value.unknownReceiverReferences,
+    }),
+    {
+      resolvedReferences: 0,
+      unresolvedReferences: 0,
+      ambiguousReferences: 0,
+      unknownReceiverReferences: 0,
+    },
+  );
+  return {
+    edges: [...edges.values()].sort((left, right) => left.id.localeCompare(right.id)),
+    metrics,
+    metricsByFile,
+  };
+}
+
+export function resolveStructuralEdges(
+  contributions: Record<string, FileContribution>,
+): StructuralEdge[] {
+  return resolveStructuralGraph(contributions).edges;
 }
 
 export function symbolsById(index: StructuralIndex): Map<string, StructuralSymbol> {

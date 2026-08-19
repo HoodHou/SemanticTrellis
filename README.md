@@ -84,9 +84,10 @@ strellis sync [repository]
 strellis audit [repository]
 strellis status [repository]
 strellis structure [repository]
-strellis grep <pattern> [repository] --fixed --in src
-strellis symbols <file> [repository]
-strellis trace <symbol> [repository] --direction incoming --depth 2
+strellis grep <pattern> [repository] --in src --context-lines 2 --include-body
+strellis symbols <file> [repository] --include-body
+strellis trace <symbol> [repository] --direction incoming --depth 2 --include-body
+strellis search-symbols <query> [repository]
 strellis mcp [repository]
 ```
 
@@ -116,7 +117,11 @@ require a validation token tied to the exact patch and current graph state.
 The disposable structural layer uses the TypeScript Compiler API for TypeScript
 and JavaScript and the ast-grep Node API with a prebuilt Tree-sitter grammar for
 C#. Each file owns its symbols, parser diagnostics, and unresolved references;
-unchanged contributions are reused by content hash.
+unchanged contributions are reused by stat-assisted content hashes. Queries
+repair stale deltas automatically, cache verified source and parsed indexes in
+long-lived MCP processes, and can return bounded context or complete symbol
+bodies. A target-name reverse index limits edge re-resolution to changed and
+affected files.
 
 See [MCP integration](docs/integrations/mcp.md) for Codex and generic host
 configuration.

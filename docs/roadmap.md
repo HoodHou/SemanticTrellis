@@ -15,8 +15,10 @@
 - [x] Introduce TypeScript/JavaScript and C# parser adapters with a shared
   language registry.
 - [x] Store per-file symbol and relationship contributions.
-- Re-resolve only keys affected by changed files.
+- [x] Re-resolve only changed files and files that reference changed definition
+  names through a persisted reverse index.
 - [x] Produce deterministic symbol search and bounded reference traces.
+- [x] Add natural-language structural symbol search and bounded source bodies.
 
 ## Milestone 2 - AI bootstrap
 

@@ -12,6 +12,7 @@ import {
   initializeProject,
   previewAgentBootstrap,
   projectStatus,
+  searchProjectSymbols,
   startAgentBootstrap,
   syncProject,
   traceProjectStructure,
@@ -31,9 +32,10 @@ Usage:
   strellis audit [repository]
   strellis status [repository]
   strellis structure [repository] [--json]
-  strellis grep <pattern> [repository] [--fixed] [--ignore-case] [--in <path>] [--json]
-  strellis symbols <file> [repository] [--json]
-  strellis trace <symbol> [repository] [--direction incoming|outgoing|both] [--depth N] [--json]
+  strellis grep <pattern> [repository] [--regex] [--ignore-case] [--in <path>] [--context-lines N] [--include-body] [--json]
+  strellis symbols <file> [repository] [--include-body] [--json]
+  strellis trace <symbol> [repository] [--direction incoming|outgoing|both] [--depth N] [--include-body] [--json]
+  strellis search-symbols <query> [repository] [--limit N] [--json]
   strellis mcp [repository]
   strellis version
   strellis help
@@ -51,6 +53,7 @@ Lifecycle:
   grep       Search indexed source and group hits by the innermost symbol.
   symbols    List symbols extracted from one source file.
   trace      Walk resolved structural references around a symbol.
+  search-symbols  Rank structural symbols by natural-language terms and graph importance.
   mcp        Serve SemanticTrellis tools and resources over stdio.
 `;
 
@@ -215,24 +218,51 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
               `in ${result.metrics.diagnosticFiles} files.`,
           );
           io.out(
+            `Resolution: ${result.metrics.resolvedReferences} resolved, ` +
+              `${result.metrics.ambiguousReferences} ambiguous, ` +
+              `${result.metrics.unresolvedReferences} unresolved ` +
+              `(${result.metrics.unknownReceiverReferences} unknown receivers).`,
+          );
+          io.out(
             `Files: ${result.metrics.parsedFiles} parsed, ${result.metrics.reusedFiles} reused, ` +
-              `${result.metrics.removedFiles} removed (${result.metrics.durationMs} ms).`,
+              `${result.metrics.removedFiles} removed, ${result.metrics.resolvedFiles} re-resolved ` +
+              `(${result.metrics.durationMs} ms).`,
           );
         }
         return 0;
       }
       case "grep": {
-        const parsed = parseArguments(rest, new Set(["--in", "--limit"]));
+        const parsed = parseArguments(
+          rest,
+          new Set(["--in", "--limit", "--context-lines", "--max-source-characters", "--max-hits-per-group"]),
+        );
         const pattern = parsed.positionals[0];
         if (pattern === undefined) throw new Error("grep requires a pattern.");
         const result = await grepStructure(rootFrom(parsed.positionals[1]), pattern, {
-          fixed: parsed.flags.has("--fixed"),
+          fixed: parsed.flags.has("--fixed") || !parsed.flags.has("--regex"),
           ignoreCase: parsed.flags.has("--ignore-case") || parsed.flags.has("-i"),
           ...(parsed.options.has("--in")
             ? { pathPrefix: parsed.options.get("--in") as string }
             : {}),
           limit: positiveInteger(parsed.options.get("--limit"), 2_000, "--limit"),
-          refresh: !parsed.flags.has("--no-refresh"),
+          refresh: parsed.flags.has("--refresh"),
+          repairStale: !parsed.flags.has("--no-refresh"),
+          contextLines: positiveInteger(
+            parsed.options.get("--context-lines"),
+            0,
+            "--context-lines",
+          ),
+          includeBody: parsed.flags.has("--include-body"),
+          maxSourceCharacters: positiveInteger(
+            parsed.options.get("--max-source-characters"),
+            20_000,
+            "--max-source-characters",
+          ),
+          maxHitsPerGroup: positiveInteger(
+            parsed.options.get("--max-hits-per-group"),
+            50,
+            "--max-hits-per-group",
+          ),
         });
         if (parsed.flags.has("--json")) {
           io.out(JSON.stringify(result, null, 2));
@@ -246,19 +276,32 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
               `${group.symbolName} · ${group.symbolKind} · ${group.path} · ` +
                 `${group.inDegree} incoming edges`,
             );
-            for (const hit of group.hits) io.out(`  L${hit.line} ${hit.text}`);
+            for (const hit of group.hits) {
+              io.out(`  L${hit.line}:C${hit.column} ${hit.text}`);
+              if (hit.context !== undefined) io.out(hit.context.text);
+            }
+            if (group.sourceContext !== undefined) io.out(group.sourceContext.text);
           }
         }
         return 0;
       }
       case "symbols": {
-        const parsed = parseArguments(rest);
+        const parsed = parseArguments(rest, new Set(["--max-source-characters"]));
         const file = parsed.positionals[0];
         if (file === undefined) throw new Error("symbols requires a file path or unique basename.");
         const result = await getFileSymbols(
           rootFrom(parsed.positionals[1]),
           file,
-          !parsed.flags.has("--no-refresh"),
+          parsed.flags.has("--refresh"),
+          {
+            includeBody: parsed.flags.has("--include-body"),
+            maxSourceCharacters: positiveInteger(
+              parsed.options.get("--max-source-characters"),
+              20_000,
+              "--max-source-characters",
+            ),
+            repairStale: !parsed.flags.has("--no-refresh"),
+          },
         );
         if (parsed.flags.has("--json")) {
           io.out(JSON.stringify(result, null, 2));
@@ -269,11 +312,15 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
                 `L${symbol.span.startLine}-L${symbol.span.endLine} · ${symbol.signature}`,
             );
           }
+          for (const source of result.sourceContexts) io.out(source.context.text);
         }
         return 0;
       }
       case "trace": {
-        const parsed = parseArguments(rest, new Set(["--direction", "--depth"]));
+        const parsed = parseArguments(
+          rest,
+          new Set(["--direction", "--depth", "--max-source-characters"]),
+        );
         const query = parsed.positionals[0];
         if (query === undefined) throw new Error("trace requires a symbol ID or name.");
         const direction = parsed.options.get("--direction") ?? "incoming";
@@ -285,7 +332,16 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
           query,
           direction as "incoming" | "outgoing" | "both",
           positiveInteger(parsed.options.get("--depth"), 1, "--depth"),
-          !parsed.flags.has("--no-refresh"),
+          parsed.flags.has("--refresh"),
+          {
+            includeBody: parsed.flags.has("--include-body"),
+            maxSourceCharacters: positiveInteger(
+              parsed.options.get("--max-source-characters"),
+              20_000,
+              "--max-source-characters",
+            ),
+            repairStale: !parsed.flags.has("--no-refresh"),
+          },
         );
         if (parsed.flags.has("--json")) {
           io.out(JSON.stringify(result, null, 2));
@@ -295,6 +351,34 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
               `${result.trace.edges.length} edges${result.trace.ambiguous ? " (ambiguous focus)" : ""}.`,
           );
           for (const edge of result.trace.edges) io.out(`${edge.from} -${edge.kind}-> ${edge.to}`);
+          if (!result.trace.found) {
+            for (const suggestion of result.trace.suggestions) {
+              io.out(`  Did you mean ${suggestion.symbol.qualifiedName}?`);
+            }
+          }
+          for (const source of result.sourceContexts) io.out(source.context.text);
+        }
+        return 0;
+      }
+      case "search-symbols": {
+        const parsed = parseArguments(rest, new Set(["--limit"]));
+        const query = parsed.positionals[0];
+        if (query === undefined) throw new Error("search-symbols requires a query.");
+        const result = await searchProjectSymbols(
+          rootFrom(parsed.positionals[1]),
+          query,
+          positiveInteger(parsed.options.get("--limit"), 20, "--limit"),
+          parsed.flags.has("--refresh"),
+          !parsed.flags.has("--no-refresh"),
+        );
+        if (parsed.flags.has("--json")) io.out(JSON.stringify(result, null, 2));
+        else {
+          for (const hit of result.hits) {
+            io.out(
+              `${hit.symbol.qualifiedName} · ${hit.symbol.kind} · score ${hit.score.toFixed(1)} · ` +
+                `${hit.symbol.path}:L${hit.symbol.span.startLine}`,
+            );
+          }
         }
         return 0;
       }

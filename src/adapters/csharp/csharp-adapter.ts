@@ -12,7 +12,7 @@ import type {
 import type { LanguageAdapter, LanguageExtractionInput } from "../../ports/language-adapter.js";
 import { ensureAstGrepLanguages } from "../ast-grep-runtime.js";
 
-const VERSION = "ast-grep-napi-0.45.1-csharp-0.0.6-v1";
+const VERSION = "ast-grep-napi-0.45.1-csharp-0.0.6-v2";
 const EXTENSIONS = new Set([".cs"]);
 
 interface DeclarationCandidate {
@@ -341,7 +341,7 @@ function referenceRecord(
   const line = position.line + 1;
   const column = position.column + 1;
   return {
-    id: `${path}#ref:${line}:${column}:${kind}:${targetName}:${ordinal}`,
+    id: `${ownerSymbolId}#ref:${kind}:${targetName}:${ordinal}`,
     path,
     ownerSymbolId,
     kind,
@@ -375,7 +375,17 @@ function buildReferences(
 ): StructuralReference[] {
   const references: StructuralReference[] = [];
   const state = { nextScope: 0, active: [] as ScopeRecord[] };
-  let ordinal = 0;
+  const referenceCounts = new Map<string, number>();
+  const ordinal = (
+    ownerSymbolId: string,
+    kind: StructuralReferenceKind,
+    targetName: string,
+  ): number => {
+    const key = `${ownerSymbolId}|${kind}|${targetName}`;
+    const value = referenceCounts.get(key) ?? 0;
+    referenceCounts.set(key, value + 1);
+    return value;
+  };
   for (const candidate of candidates) {
     const owner = ownerFor(candidate, fileSymbol, scopes, state);
     if (candidate.kind === "invocation") {
@@ -388,7 +398,7 @@ function buildReferences(
         "call",
         target.name,
         target.qualifier,
-        ordinal++,
+        ordinal(owner.id, "call", target.name),
       ));
       continue;
     }
@@ -403,7 +413,7 @@ function buildReferences(
         "construct",
         name,
         normalizedQualifier(type),
-        ordinal++,
+        ordinal(owner.id, "construct", name),
       ));
       continue;
     }
@@ -418,7 +428,7 @@ function buildReferences(
         "import",
         simpleNameFromText(normalized) ?? normalized,
         normalized,
-        ordinal++,
+        ordinal(fileSymbol.id, "import", simpleNameFromText(normalized) ?? normalized),
       ));
       continue;
     }
@@ -432,7 +442,11 @@ function buildReferences(
       baseReferenceKind(owner, candidate.baseIndex ?? 0),
       name,
       normalizedQualifier(text),
-      ordinal++,
+      ordinal(
+        owner.id,
+        baseReferenceKind(owner, candidate.baseIndex ?? 0),
+        name,
+      ),
     ));
   }
   return references;
@@ -479,6 +493,8 @@ export class CSharpLanguageAdapter implements LanguageAdapter {
     return {
       path: input.path,
       hash: input.hash,
+      sourceSize: input.size ?? Buffer.byteLength(input.source, "utf8"),
+      sourceMtimeMs: input.mtimeMs ?? 0,
       language: this.id,
       extractorVersion: this.version,
       symbols: built.symbols,

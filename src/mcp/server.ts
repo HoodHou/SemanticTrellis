@@ -14,6 +14,7 @@ import {
   grepStructure,
   previewAgentBootstrap,
   projectStatus,
+  searchProjectSymbols,
   startAgentBootstrap,
   submitBootstrapChunkSummaries,
   submitBootstrapFileSummaries,
@@ -41,13 +42,14 @@ import {
   statusOutputSchema,
   structuralBuildMetricsSchema,
   structuralGrepOutputSchema,
+  structuralSymbolSearchOutputSchema,
   structuralTraceOutputSchema,
   syncOutputSchema,
   validationOutputSchema,
 } from "./schemas.js";
 
 const INSTRUCTIONS =
-  "SemanticTrellis serves one fixed repository. For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.";
+  "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use symbol_search for natural-language discovery and grep/trace with bounded source bodies for exact answers. For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.";
 
 function success<T extends Record<string, unknown>>(value: T) {
   return {
@@ -457,13 +459,17 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Symbol-Aware Structural Grep",
       description:
-        "Search the existing structural index exhaustively, group matches by innermost symbol, and attach curated semantic node IDs. Call structure first after source changes.",
+        "Search indexed source exhaustively, repair stale contributions once, group matches by symbol importance, and optionally return bounded source context or symbol bodies.",
       inputSchema: z.object({
         pattern: z.string().min(1),
-        fixed: z.boolean().default(false),
+        fixed: z.boolean().default(true),
         ignoreCase: z.boolean().default(false),
         pathPrefix: z.string().optional(),
         limit: z.number().int().min(1).max(5_000).default(2_000),
+        maxHitsPerGroup: z.number().int().min(1).max(500).default(50),
+        contextLines: z.number().int().min(0).max(20).default(0),
+        includeBody: z.boolean().default(false),
+        maxSourceCharacters: z.number().int().min(0).max(200_000).default(20_000),
       }),
       outputSchema: structuralGrepOutputSchema,
       annotations: {
@@ -472,14 +478,29 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
         openWorldHint: false,
       },
     },
-    async ({ pattern, fixed, ignoreCase, pathPrefix, limit }) =>
+    async ({
+      pattern,
+      fixed,
+      ignoreCase,
+      pathPrefix,
+      limit,
+      maxHitsPerGroup,
+      contextLines,
+      includeBody,
+      maxSourceCharacters,
+    }) =>
       safe(async () => ({
         ...(await grepStructure(root, pattern, {
           fixed,
           ignoreCase,
           ...(pathPrefix === undefined ? {} : { pathPrefix }),
           limit,
+          maxHitsPerGroup,
+          contextLines,
+          includeBody,
+          maxSourceCharacters,
           refresh: false,
+          repairStale: true,
         })),
       })),
   );
@@ -489,8 +510,12 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read File Symbols",
       description:
-        "Return every symbol and source span extracted from one exact repository path or unique basename. Call structure first after source changes.",
-      inputSchema: z.object({ file: z.string().min(1) }),
+        "Return every symbol and source span extracted from one exact repository path or unique basename, repairing stale contributions and optionally including bounded bodies.",
+      inputSchema: z.object({
+        file: z.string().min(1),
+        includeBody: z.boolean().default(false),
+        maxSourceCharacters: z.number().int().min(0).max(200_000).default(20_000),
+      }),
       outputSchema: fileSymbolsOutputSchema,
       annotations: {
         readOnlyHint: true,
@@ -498,7 +523,14 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
         openWorldHint: false,
       },
     },
-    async ({ file }) => safe(async () => ({ ...(await getFileSymbols(root, file, false)) })),
+    async ({ file, includeBody, maxSourceCharacters }) =>
+      safe(async () => ({
+        ...(await getFileSymbols(root, file, false, {
+          includeBody,
+          maxSourceCharacters,
+          repairStale: true,
+        })),
+      })),
   );
 
   server.registerTool(
@@ -506,11 +538,13 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Trace Structural References",
       description:
-        "Trace resolved incoming callers, outgoing dependencies, or both around a symbol ID, qualified name, or exact bare name. Call structure first after source changes.",
+        "Trace resolved incoming callers or outgoing dependencies around a symbol, repair stale contributions, return near-name suggestions on misses, and optionally include bounded bodies.",
       inputSchema: z.object({
         query: z.string().min(1),
         direction: z.enum(["incoming", "outgoing", "both"]).default("incoming"),
         depth: z.number().int().min(0).max(8).default(1),
+        includeBody: z.boolean().default(false),
+        maxSourceCharacters: z.number().int().min(0).max(200_000).default(20_000),
       }),
       outputSchema: structuralTraceOutputSchema,
       annotations: {
@@ -519,9 +553,36 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
         openWorldHint: false,
       },
     },
-    async ({ query, direction, depth }) =>
+    async ({ query, direction, depth, includeBody, maxSourceCharacters }) =>
       safe(async () => ({
-        ...(await traceProjectStructure(root, query, direction, depth, false)),
+        ...(await traceProjectStructure(root, query, direction, depth, false, {
+          includeBody,
+          maxSourceCharacters,
+          repairStale: true,
+        })),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_symbol_search",
+    {
+      title: "Search Structural Symbols",
+      description:
+        "Rank symbols by natural-language terms across names, qualified names, signatures, paths, incoming degree, and curated provenance.",
+      inputSchema: z.object({
+        query: z.string().min(1),
+        limit: z.number().int().min(1).max(100).default(20),
+      }),
+      outputSchema: structuralSymbolSearchOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ query, limit }) =>
+      safe(async () => ({
+        ...(await searchProjectSymbols(root, query, limit, false, true)),
       })),
   );
 

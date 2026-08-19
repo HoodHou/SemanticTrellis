@@ -11,6 +11,7 @@ interface Candidate {
   absolutePath: string;
   relativePath: string;
   size: number;
+  mtimeMs: number;
 }
 
 function toPosixPath(path: string): string {
@@ -64,7 +65,12 @@ async function collectGitCandidates(
       if (!fileStat.isFile() || fileStat.isSymbolicLink() || fileStat.size > policy.maxFileBytes) {
         continue;
       }
-      candidates.push({ absolutePath, relativePath, size: fileStat.size });
+      candidates.push({
+        absolutePath,
+        relativePath,
+        size: fileStat.size,
+        mtimeMs: fileStat.mtimeMs,
+      });
     } catch {
       // A tracked file deleted in the worktree is still returned by --cached.
     }
@@ -98,6 +104,7 @@ async function collectCandidates(
       absolutePath,
       relativePath,
       size: fileStat.size,
+      mtimeMs: fileStat.mtimeMs,
     });
   }
 }
@@ -127,11 +134,25 @@ async function mapWithConcurrency<T, R>(
 export interface RepositoryScan {
   discoveryMode: "git" | "filesystem";
   files: FileRecord[];
+  sources: Record<string, string>;
+}
+
+export interface RepositoryScanOptions {
+  previousFiles?: readonly FileRecord[] | undefined;
+  captureSource?: ((path: string) => boolean) | undefined;
+  forceHash?: boolean | ReadonlySet<string> | undefined;
+}
+
+function mustHash(path: string, option: RepositoryScanOptions["forceHash"]): boolean {
+  if (option === true) return true;
+  if (option === false || option === undefined) return false;
+  return option.has(path);
 }
 
 export async function scanRepositoryDetailed(
   root: string,
   policy: SourcePolicy,
+  options: RepositoryScanOptions = {},
 ): Promise<RepositoryScan> {
   const absoluteRoot = resolve(root);
   const rootStat = await stat(absoluteRoot);
@@ -146,20 +167,48 @@ export async function scanRepositoryDetailed(
   }
   candidates.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 
+  const previousByPath = new Map(
+    (options.previousFiles ?? []).map((file) => [file.path, file]),
+  );
+  const sources: Record<string, string> = {};
   const files = await mapWithConcurrency(candidates, 16, async (candidate) => {
+    const previous = previousByPath.get(candidate.relativePath);
+    if (
+      !mustHash(candidate.relativePath, options.forceHash) &&
+      previous !== undefined &&
+      previous.mtimeMs !== undefined &&
+      previous.size === candidate.size &&
+      previous.mtimeMs === candidate.mtimeMs
+    ) {
+      return {
+        path: candidate.relativePath,
+        hash: previous.hash,
+        size: candidate.size,
+        mtimeMs: candidate.mtimeMs,
+      };
+    }
     const bytes = await readFile(candidate.absolutePath);
+    if (options.captureSource?.(candidate.relativePath) === true) {
+      sources[candidate.relativePath] = bytes.toString("utf8");
+    }
     return {
       path: candidate.relativePath,
       hash: createHash("sha256").update(bytes).digest("hex"),
       size: candidate.size,
+      mtimeMs: candidate.mtimeMs,
     };
   });
-  return { discoveryMode: gitPaths === null ? "filesystem" : "git", files };
+  return {
+    discoveryMode: gitPaths === null ? "filesystem" : "git",
+    files,
+    sources,
+  };
 }
 
 export async function scanRepository(
   root: string,
   policy: SourcePolicy,
+  options: RepositoryScanOptions = {},
 ): Promise<FileRecord[]> {
-  return (await scanRepositoryDetailed(root, policy)).files;
+  return (await scanRepositoryDetailed(root, policy, options)).files;
 }

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.0 - 2026-08-18
+
+### Added
+
+- Automatic stale structural-index repair for CLI and MCP read tools.
+- In-process parsed-index and verified-source caches for long-lived Agent hosts.
+- Git revision, dirty-path, untracked-path, and stat-assisted freshness probes.
+- Persisted target-name reverse references and per-file resolution metrics for
+  affected-file-only edge maintenance.
+- Observable resolved, unresolved, ambiguous, and unknown-receiver counts.
+- Natural-language structural symbol search with signature, incoming-degree,
+  and curated-provenance ranking.
+- Bounded grep context, symbol bodies for grep/symbols/trace, match columns and
+  lengths, fair importance-ranked truncation, and trace miss suggestions.
+- Stable synthetic symbols for labelled and unlabelled call callbacks.
+- Fixed-search defaults and a guard for common catastrophic regular expressions.
+
+### Changed
+
+- Structural cache schema is version 5.
+- CLI structural reads now trust and repair the cache by default; `--refresh`
+  remains available for explicit full refresh and `--no-refresh` disables repair.
+- Reference IDs use owner-local semantic ordinals rather than source line and
+  column positions.
+- Locked-node documentation now distinguishes identical upserts from changes.
+
 ## 0.5.0 - 2026-08-18
 
 ### Added

@@ -19,7 +19,12 @@ async function fixture(): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 50,
+  })));
 });
 
 describe("MCP server", () => {
@@ -45,6 +50,7 @@ describe("MCP server", () => {
           "semantic_trellis_grep",
           "semantic_trellis_file_symbols",
           "semantic_trellis_trace",
+          "semantic_trellis_symbol_search",
           "semantic_trellis_bootstrap_preview",
           "semantic_trellis_bootstrap_start",
           "semantic_trellis_bootstrap_status",
@@ -314,6 +320,17 @@ describe("MCP server", () => {
       expect(fileSymbols.isError).not.toBe(true);
       expect(fileSymbols.structuredContent).toMatchObject({
         symbols: expect.arrayContaining([expect.objectContaining({ name: "value" })]),
+      });
+
+      const symbolSearch = await client.callTool({
+        name: "semantic_trellis_symbol_search",
+        arguments: { query: "fixture value", limit: 5 },
+      });
+      expect(symbolSearch.isError).not.toBe(true);
+      expect(symbolSearch.structuredContent).toMatchObject({
+        hits: expect.arrayContaining([
+          expect.objectContaining({ symbol: expect.objectContaining({ name: "value" }) }),
+        ]),
       });
 
       const search = await client.callTool({

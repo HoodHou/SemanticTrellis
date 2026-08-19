@@ -150,7 +150,7 @@
       "id": "command-line-adapter",
       "name": "Command-Line Adapter",
       "kind": "component",
-      "summary": "Exposes the SemanticTrellis lifecycle through the strellis command-line interface.",
+      "summary": "Exposes the complete SemanticTrellis lifecycle and cached structural grep, symbols, trace, natural-language search, source-context, repair, and metrics workflows through the strellis command-line interface.",
       "sources": [
         {
           "path": "src/cli/index.ts",
@@ -163,7 +163,8 @@
       ],
       "tags": [
         "cli",
-        "adapter"
+        "adapter",
+        "retrieval"
       ],
       "status": "approved",
       "locked": false
@@ -246,7 +247,7 @@
       "id": "language-extraction-adapters",
       "name": "Language Extraction Adapters",
       "kind": "component",
-      "summary": "Defines the language adapter port and pinned Compiler API or Tree-sitter implementations that turn TypeScript, JavaScript, and C# files into independently cacheable structural contributions with diagnostics.",
+      "summary": "Defines the language adapter port and pinned Compiler API or Tree-sitter implementations that turn TypeScript, JavaScript, and C# files into independently cacheable contributions with stable owner-local references, parser diagnostics, and synthetic callback scopes for test-heavy code.",
       "sources": [
         {
           "path": "src/ports/language-adapter.ts",
@@ -283,7 +284,8 @@
         "csharp",
         "tree-sitter",
         "adapter",
-        "structural"
+        "structural",
+        "callback"
       ],
       "status": "approved",
       "locked": true
@@ -292,7 +294,7 @@
       "id": "mcp-agent-adapter",
       "name": "MCP Agent Adapter",
       "kind": "subsystem",
-      "summary": "Exposes the fixed repository's curated graph, structural index, symbol-aware grep and trace, review state, audits, delta sync, and validation-token curation workflow to MCP-compatible agents.",
+      "summary": "Exposes 22 fixed-repository Agent tools and three resources for AI bootstrap, curated graph maintenance, automatically repaired structural reads, natural-language symbol discovery, bounded source retrieval, review state, audits, and validation-token graph writes.",
       "sources": [
         {
           "path": "src/mcp/server.ts",
@@ -319,7 +321,8 @@
         "mcp",
         "agent",
         "adapter",
-        "integration"
+        "integration",
+        "retrieval"
       ],
       "status": "approved",
       "locked": true
@@ -328,10 +331,18 @@
       "id": "repository-infrastructure",
       "name": "Repository Infrastructure",
       "kind": "subsystem",
-      "summary": "Owns repository scanning, canonical hashing, project layout, validated JSON persistence, and local state boundaries.",
+      "summary": "Owns Git-aware discovery and delta probes, stat-assisted exact hashing, validated persistence, parsed graph caching, verified source caching, project layout, and disposable local-state boundaries.",
       "sources": [
         {
           "path": "src/infrastructure/repository-scanner.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/infrastructure/repository-state.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/infrastructure/source-cache.ts",
           "role": "primary"
         },
         {
@@ -354,7 +365,9 @@
       "tags": [
         "infrastructure",
         "repository",
-        "persistence"
+        "persistence",
+        "cache",
+        "git"
       ],
       "status": "approved",
       "locked": true
@@ -386,7 +399,7 @@
       "id": "semantic-trellis-product",
       "name": "SemanticTrellis Product",
       "kind": "system",
-      "summary": "The complete product that turns repository understanding into a durable, curated semantic graph.",
+      "summary": "Turns one consented full-repository AI review into a durable curated semantic graph, then maintains repository understanding through bounded structural and semantic deltas instead of repeating the full review.",
       "sources": [
         {
           "path": "README.md",
@@ -399,7 +412,8 @@
       ],
       "tags": [
         "product",
-        "semantic-graph"
+        "semantic-graph",
+        "delta-maintenance"
       ],
       "status": "approved",
       "locked": true
@@ -408,7 +422,7 @@
       "id": "structural-index-engine",
       "name": "Structural Index Engine",
       "kind": "subsystem",
-      "summary": "Maintains per-file structural contributions, resolves references, groups source grep hits by symbol, and provides bounded structural traces.",
+      "summary": "Maintains cached per-file structural contributions, repairs source deltas automatically, re-resolves only changed and definition-name-affected files, exposes resolution quality metrics, and serves symbol-aware grep, bounded source bodies, natural-language symbol search, and reference traces.",
       "sources": [
         {
           "path": "src/domain/structural.ts",
@@ -437,6 +451,14 @@
         {
           "path": "src/application/structural-query.ts",
           "role": "primary"
+        },
+        {
+          "path": "src/application/structural-search.ts",
+          "role": "primary"
+        },
+        {
+          "path": "docs/adr/0009-live-structural-query-runtime.md",
+          "role": "supporting"
         }
       ],
       "tags": [
@@ -444,6 +466,8 @@
         "symbols",
         "grep",
         "trace",
+        "search",
+        "cache",
         "incremental"
       ],
       "status": "approved",
@@ -453,7 +477,7 @@
       "id": "verification-suite",
       "name": "Verification Suite",
       "kind": "component",
-      "summary": "Verifies AI bootstrap; graph integrity; Git discovery; TypeScript and C# extraction, diagnostics and conservative resolution; structural reuse, grep and trace; the project lifecycle; and MCP in-memory and stdio behavior.",
+      "summary": "Verifies AI bootstrap and graph integrity plus Git discovery, exact forced hashing, TypeScript callback attribution, stable reference identity, C# ambiguity metrics, affected-file resolution, automatic stale repair, source context, ranked truncation, natural-language symbol search, trace suggestions, and the full MCP workflow.",
       "sources": [
         {
           "path": "test/agent-bootstrap.test.ts",
@@ -510,7 +534,8 @@
         "mcp",
         "structural",
         "csharp",
-        "ai-bootstrap"
+        "ai-bootstrap",
+        "incremental"
       ],
       "status": "approved",
       "locked": false

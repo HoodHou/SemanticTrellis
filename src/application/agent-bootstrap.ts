@@ -32,11 +32,16 @@ export interface AgentBootstrapStartResult {
   structural: {
     parsedFiles: number;
     reusedFiles: number;
+    resolvedFiles: number;
     symbols: number;
     references: number;
     diagnostics: number;
     diagnosticFiles: number;
     edges: number;
+    resolvedReferences: number;
+    unresolvedReferences: number;
+    ambiguousReferences: number;
+    unknownReceiverReferences: number;
   };
 }
 
@@ -242,11 +247,16 @@ export async function startAgentBootstrap(
       structural: {
         parsedFiles: structural.metrics.parsedFiles,
         reusedFiles: structural.metrics.reusedFiles,
+        resolvedFiles: structural.metrics.resolvedFiles,
         symbols: structural.metrics.symbols,
         references: structural.metrics.references,
         diagnostics: structural.metrics.diagnostics,
         diagnosticFiles: structural.metrics.diagnosticFiles,
         edges: structural.metrics.edges,
+        resolvedReferences: structural.metrics.resolvedReferences,
+        unresolvedReferences: structural.metrics.unresolvedReferences,
+        ambiguousReferences: structural.metrics.ambiguousReferences,
+        unknownReceiverReferences: structural.metrics.unknownReceiverReferences,
       },
     };
   }
@@ -293,11 +303,16 @@ export async function startAgentBootstrap(
     structural: {
       parsedFiles: structural.metrics.parsedFiles,
       reusedFiles: structural.metrics.reusedFiles,
+      resolvedFiles: structural.metrics.resolvedFiles,
       symbols: structural.metrics.symbols,
       references: structural.metrics.references,
       diagnostics: structural.metrics.diagnostics,
       diagnosticFiles: structural.metrics.diagnosticFiles,
       edges: structural.metrics.edges,
+      resolvedReferences: structural.metrics.resolvedReferences,
+      unresolvedReferences: structural.metrics.unresolvedReferences,
+      ambiguousReferences: structural.metrics.ambiguousReferences,
+      unknownReceiverReferences: structural.metrics.unknownReceiverReferences,
     },
   };
 }

@@ -196,6 +196,7 @@ export const structuralSymbolSchema = z.object({
     "enum",
     "delegate",
     "function",
+    "callback",
     "method",
     "constructor",
     "destructor",
@@ -225,17 +226,38 @@ export const structuralBuildMetricsSchema = z.object({
   parsedFiles: z.number().int().nonnegative(),
   reusedFiles: z.number().int().nonnegative(),
   removedFiles: z.number().int().nonnegative(),
+  resolvedFiles: z.number().int().nonnegative(),
   symbols: z.number().int().nonnegative(),
   references: z.number().int().nonnegative(),
   diagnostics: z.number().int().nonnegative(),
   diagnosticFiles: z.number().int().nonnegative(),
   edges: z.number().int().nonnegative(),
+  resolvedReferences: z.number().int().nonnegative(),
+  unresolvedReferences: z.number().int().nonnegative(),
+  ambiguousReferences: z.number().int().nonnegative(),
+  unknownReceiverReferences: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
+});
+
+export const sourceContextSchema = z.object({
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  text: z.string(),
+  truncated: z.boolean(),
+});
+
+export const structuralSymbolSourceSchema = z.object({
+  symbolId: z.string(),
+  path: z.string(),
+  context: sourceContextSchema,
 });
 
 export const structuralGrepHitSchema = z.object({
   line: z.number().int().positive(),
+  column: z.number().int().positive(),
+  matchLength: z.number().int().nonnegative(),
   text: z.string(),
+  context: sourceContextSchema.optional(),
 });
 
 export const structuralGrepOutputSchema = z.object({
@@ -250,6 +272,9 @@ export const structuralGrepOutputSchema = z.object({
       symbolKind: structuralSymbolSchema.shape.kind,
       inDegree: z.number().int().nonnegative(),
       curatedNodeIds: z.array(z.string()),
+      totalHits: z.number().int().nonnegative(),
+      truncatedHits: z.number().int().nonnegative(),
+      sourceContext: sourceContextSchema.optional(),
       hits: z.array(structuralGrepHitSchema),
     }),
   ),
@@ -262,6 +287,7 @@ export const structuralGrepOutputSchema = z.object({
 export const fileSymbolsOutputSchema = z.object({
   file: z.string(),
   symbols: z.array(structuralSymbolSchema),
+  sourceContexts: z.array(structuralSymbolSourceSchema),
   build: structuralBuildMetricsSchema,
 });
 
@@ -270,11 +296,29 @@ export const structuralTraceOutputSchema = z.object({
     query: z.string(),
     direction: z.enum(["incoming", "outgoing", "both"]),
     depth: z.number().int().nonnegative(),
+    found: z.boolean(),
     focus: z.array(structuralSymbolSchema),
     symbols: z.array(structuralSymbolSchema),
     edges: z.array(structuralEdgeSchema),
     ambiguous: z.boolean(),
+    suggestions: z.array(z.object({
+      symbol: structuralSymbolSchema,
+      score: z.number(),
+    })),
   }),
+  sourceContexts: z.array(structuralSymbolSourceSchema),
+  build: structuralBuildMetricsSchema,
+});
+
+export const structuralSymbolSearchOutputSchema = z.object({
+  query: z.string(),
+  hits: z.array(z.object({
+    symbol: structuralSymbolSchema,
+    score: z.number(),
+    matchedFields: z.array(z.string()),
+    inDegree: z.number().int().nonnegative(),
+    curatedNodeIds: z.array(z.string()),
+  })),
   build: structuralBuildMetricsSchema,
 });
 
@@ -301,11 +345,16 @@ export const agentBootstrapStartOutputSchema = z.object({
   structural: z.object({
     parsedFiles: z.number().int().nonnegative(),
     reusedFiles: z.number().int().nonnegative(),
+    resolvedFiles: z.number().int().nonnegative(),
     symbols: z.number().int().nonnegative(),
     references: z.number().int().nonnegative(),
     diagnostics: z.number().int().nonnegative(),
     diagnosticFiles: z.number().int().nonnegative(),
     edges: z.number().int().nonnegative(),
+    resolvedReferences: z.number().int().nonnegative(),
+    unresolvedReferences: z.number().int().nonnegative(),
+    ambiguousReferences: z.number().int().nonnegative(),
+    unknownReceiverReferences: z.number().int().nonnegative(),
   }),
 });
 

@@ -1,34 +1,111 @@
 import type {
+  SourceContext,
   StructuralBuildMetrics,
   StructuralSymbol,
   StructuralTrace,
   TraceDirection,
 } from "../domain/structural.js";
 import { symbolsForFile, traceStructuralGraph } from "../structural/queries.js";
-import { loadOrBuildStructuralIndex } from "./structure.js";
+import { readVerifiedSource } from "../infrastructure/source-cache.js";
+import { ensureStructuralIndex } from "./structure.js";
+
+export interface StructuralSourceOptions {
+  includeBody?: boolean;
+  maxSourceCharacters?: number;
+  repairStale?: boolean;
+}
+
+export interface StructuralSymbolSource {
+  symbolId: string;
+  path: string;
+  context: SourceContext;
+}
 
 export interface FileSymbolsResult {
   file: string;
   symbols: StructuralSymbol[];
+  sourceContexts: StructuralSymbolSource[];
   build: StructuralBuildMetrics;
 }
 
 export interface TraceResult {
   trace: StructuralTrace;
+  sourceContexts: StructuralSymbolSource[];
   build: StructuralBuildMetrics;
+}
+
+function contextForSymbol(
+  source: string,
+  symbol: StructuralSymbol,
+  remainingCharacters: number,
+): { value: StructuralSymbolSource | null; used: number } {
+  if (remainingCharacters <= 0) return { value: null, used: 0 };
+  const lines = source.split(/\r?\n/);
+  const startLine = Math.max(1, symbol.span.startLine);
+  const endLine = Math.min(lines.length, Math.max(startLine, symbol.span.endLine));
+  const complete = lines.slice(startLine - 1, endLine).join("\n");
+  const text = complete.slice(0, remainingCharacters);
+  return {
+    value: {
+      symbolId: symbol.id,
+      path: symbol.path,
+      context: {
+        startLine,
+        endLine,
+        text,
+        truncated: text.length < complete.length,
+      },
+    },
+    used: text.length,
+  };
+}
+
+async function sourceContexts(
+  root: string,
+  symbols: StructuralSymbol[],
+  options: StructuralSourceOptions,
+  hashes: ReadonlyMap<string, string>,
+): Promise<StructuralSymbolSource[]> {
+  if (options.includeBody !== true) return [];
+  let remaining = Math.max(
+    0,
+    Math.min(200_000, Math.floor(options.maxSourceCharacters ?? 20_000)),
+  );
+  const sources = new Map<string, string>();
+  const output: StructuralSymbolSource[] = [];
+  for (const symbol of symbols) {
+    if (remaining <= 0) break;
+    let source = sources.get(symbol.path);
+    if (source === undefined) {
+      const hash = hashes.get(symbol.path);
+      if (hash === undefined) continue;
+      source = await readVerifiedSource(root, symbol.path, hash);
+      sources.set(symbol.path, source);
+    }
+    const taken = contextForSymbol(source, symbol, remaining);
+    if (taken.value !== null) output.push(taken.value);
+    remaining -= taken.used;
+  }
+  return output;
 }
 
 export async function getFileSymbols(
   root: string,
   file: string,
-  refresh = true,
+  refresh = false,
+  options: StructuralSourceOptions = {},
 ): Promise<FileSymbolsResult> {
-  const built = await loadOrBuildStructuralIndex(root, refresh);
+  const built = await ensureStructuralIndex(root, refresh, options.repairStale !== false);
+  const symbols = symbolsForFile(built.index, file).sort(
+    (left, right) => left.span.startLine - right.span.startLine,
+  );
+  const hashes = new Map(
+    Object.values(built.index.contributions).map((contribution) => [contribution.path, contribution.hash]),
+  );
   return {
     file,
-    symbols: symbolsForFile(built.index, file).sort(
-      (left, right) => left.span.startLine - right.span.startLine,
-    ),
+    symbols,
+    sourceContexts: await sourceContexts(root, symbols, options, hashes),
     build: built.metrics,
   };
 }
@@ -38,11 +115,17 @@ export async function traceProjectStructure(
   query: string,
   direction: TraceDirection = "incoming",
   depth = 1,
-  refresh = true,
+  refresh = false,
+  options: StructuralSourceOptions = {},
 ): Promise<TraceResult> {
-  const built = await loadOrBuildStructuralIndex(root, refresh);
+  const built = await ensureStructuralIndex(root, refresh, options.repairStale !== false);
+  const trace = traceStructuralGraph(built.index, query, direction, depth);
+  const hashes = new Map(
+    Object.values(built.index.contributions).map((contribution) => [contribution.path, contribution.hash]),
+  );
   return {
-    trace: traceStructuralGraph(built.index, query, direction, depth),
+    trace,
+    sourceContexts: await sourceContexts(root, trace.symbols, options, hashes),
     build: built.metrics,
   };
 }

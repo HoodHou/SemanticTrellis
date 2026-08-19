@@ -1,4 +1,4 @@
-export const STRUCTURAL_SCHEMA_VERSION = 2 as const;
+export const STRUCTURAL_SCHEMA_VERSION = 5 as const;
 
 export type StructuralSymbolKind =
   | "file"
@@ -11,6 +11,7 @@ export type StructuralSymbolKind =
   | "enum"
   | "delegate"
   | "function"
+  | "callback"
   | "method"
   | "constructor"
   | "destructor"
@@ -67,6 +68,8 @@ export interface StructuralDiagnostic {
 export interface FileContribution {
   path: string;
   hash: string;
+  sourceSize: number;
+  sourceMtimeMs: number;
   language: string;
   extractorVersion: string;
   symbols: StructuralSymbol[];
@@ -85,8 +88,21 @@ export interface StructuralEdge {
 export interface StructuralIndex {
   schemaVersion: typeof STRUCTURAL_SCHEMA_VERSION;
   discoveryMode: "git" | "filesystem";
+  repositoryRevision: string | null;
+  untrackedPaths: string[];
   contributions: Record<string, FileContribution>;
   edges: StructuralEdge[];
+  resolution: StructuralResolutionMetrics;
+  resolutionByFile: Record<string, StructuralResolutionMetrics>;
+  referenceFilesByName: Record<string, string[]>;
+  referenceNamesByFile: Record<string, string[]>;
+}
+
+export interface StructuralResolutionMetrics {
+  resolvedReferences: number;
+  unresolvedReferences: number;
+  ambiguousReferences: number;
+  unknownReceiverReferences: number;
 }
 
 export interface StructuralBuildMetrics {
@@ -96,11 +112,16 @@ export interface StructuralBuildMetrics {
   parsedFiles: number;
   reusedFiles: number;
   removedFiles: number;
+  resolvedFiles: number;
   symbols: number;
   references: number;
   diagnostics: number;
   diagnosticFiles: number;
   edges: number;
+  resolvedReferences: number;
+  unresolvedReferences: number;
+  ambiguousReferences: number;
+  unknownReceiverReferences: number;
   durationMs: number;
 }
 
@@ -115,15 +136,32 @@ export interface StructuralTrace {
   query: string;
   direction: TraceDirection;
   depth: number;
+  found: boolean;
   focus: StructuralSymbol[];
   symbols: StructuralSymbol[];
   edges: StructuralEdge[];
   ambiguous: boolean;
+  suggestions: StructuralSymbolSuggestion[];
+}
+
+export interface StructuralSymbolSuggestion {
+  symbol: StructuralSymbol;
+  score: number;
+}
+
+export interface SourceContext {
+  startLine: number;
+  endLine: number;
+  text: string;
+  truncated: boolean;
 }
 
 export interface StructuralGrepHit {
   line: number;
+  column: number;
+  matchLength: number;
   text: string;
+  context?: SourceContext | undefined;
 }
 
 export interface StructuralGrepGroup {
@@ -133,6 +171,9 @@ export interface StructuralGrepGroup {
   symbolKind: StructuralSymbolKind;
   inDegree: number;
   curatedNodeIds: string[];
+  totalHits: number;
+  truncatedHits: number;
+  sourceContext?: SourceContext | undefined;
   hits: StructuralGrepHit[];
 }
 
@@ -145,4 +186,12 @@ export interface StructuralGrepResult {
   symbolAttributionRate: number;
   curatedAttributionRate: number;
   queryDurationMs: number;
+}
+
+export interface StructuralSymbolSearchHit {
+  symbol: StructuralSymbol;
+  score: number;
+  matchedFields: string[];
+  inDegree: number;
+  curatedNodeIds: string[];
 }

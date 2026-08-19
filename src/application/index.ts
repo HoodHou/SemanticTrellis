@@ -7,4 +7,5 @@ export * from "./status.js";
 export * from "./structure.js";
 export * from "./structural-grep.js";
 export * from "./structural-query.js";
+export * from "./structural-search.js";
 export * from "./sync.js";

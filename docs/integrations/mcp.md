@@ -39,9 +39,10 @@ for protocol messages; diagnostics are written to standard error.
 | `semantic_trellis_audit` | Read integrity, provenance, and coverage findings |
 | `semantic_trellis_sync` | Update disposable snapshot state and review queue |
 | `semantic_trellis_structure` | Incrementally refresh symbols, references, and edges |
-| `semantic_trellis_grep` | Search indexed source and group hits by symbol and curated node |
-| `semantic_trellis_file_symbols` | Read every extracted symbol in one file |
-| `semantic_trellis_trace` | Trace resolved incoming or outgoing structural edges |
+| `semantic_trellis_grep` | Search source with stale repair, columns, fair grouping, and optional bounded context/body |
+| `semantic_trellis_file_symbols` | Read every extracted symbol and optionally bounded bodies in one file |
+| `semantic_trellis_trace` | Trace structural edges, return miss suggestions, and optionally bounded bodies |
+| `semantic_trellis_symbol_search` | Rank symbols by natural-language terms, signatures, graph importance, and curated provenance |
 | `semantic_trellis_validate_patch` | Validate a patch without writing |
 | `semantic_trellis_apply_patch` | Apply the exact validated patch to the canonical graph |
 
@@ -56,7 +57,8 @@ for protocol messages; diagnostics are written to standard error.
 Agents must never call `semantic_trellis_apply_patch` directly.
 
 1. Read status and pending review work.
-2. Run `semantic_trellis_structure` after source changes.
+2. Let structural read tools repair ordinary source deltas automatically; use
+   `semantic_trellis_structure` when an explicit full refresh is desired.
 3. Read or search the relevant curated or structural neighborhood.
 4. Build a small graph patch with source evidence.
 5. Call `semantic_trellis_validate_patch`.

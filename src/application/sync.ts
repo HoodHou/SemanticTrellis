@@ -27,7 +27,9 @@ export async function syncProject(root: string): Promise<SyncResult> {
 
   const config = await loadConfig(root);
   const graph = await loadGraph(root);
-  const current = createSnapshot(await scanRepository(root, config.source));
+  const current = createSnapshot(await scanRepository(root, config.source, {
+    previousFiles: previous.files,
+  }));
   const changes = diffSnapshots(previous, current);
   const currentQueue = await loadReviewQueue(root);
   const queue = mergeReviewQueue(currentQueue, createReviewItems(changes, graph));

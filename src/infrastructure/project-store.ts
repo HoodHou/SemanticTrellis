@@ -1,4 +1,4 @@
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readFile, stat, writeFile } from "node:fs/promises";
 import {
   SCHEMA_VERSION,
   type ApprovalStatus,
@@ -46,6 +46,14 @@ const RELATIONS = new Set<SemanticRelation>([
   "documents",
   "related-to",
 ]);
+
+interface CachedGraph {
+  size: number;
+  mtimeMs: number;
+  graph: CuratedGraph;
+}
+
+const graphCache = new Map<string, CachedGraph>();
 
 function record(value: unknown, context: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -228,7 +236,15 @@ export async function loadConfig(root: string): Promise<ProjectConfig> {
 }
 
 export async function loadGraph(root: string): Promise<CuratedGraph> {
-  return parseGraph(await readJsonFile(projectLayout(root).graphFile));
+  const path = projectLayout(root).graphFile;
+  const fileStat = await stat(path);
+  const cached = graphCache.get(path);
+  if (cached?.size === fileStat.size && cached.mtimeMs === fileStat.mtimeMs) {
+    return cached.graph;
+  }
+  const graph = parseGraph(await readJsonFile(path));
+  graphCache.set(path, { size: fileStat.size, mtimeMs: fileStat.mtimeMs, graph });
+  return graph;
 }
 
 export async function loadSnapshot(root: string): Promise<RepositorySnapshot | null> {
@@ -256,7 +272,10 @@ export async function saveConfig(root: string, config: ProjectConfig): Promise<v
 }
 
 export async function saveGraph(root: string, graph: CuratedGraph): Promise<void> {
-  await writeJsonFile(projectLayout(root).graphFile, graph);
+  const path = projectLayout(root).graphFile;
+  await writeJsonFile(path, graph);
+  const fileStat = await stat(path);
+  graphCache.set(path, { size: fileStat.size, mtimeMs: fileStat.mtimeMs, graph });
 }
 
 export async function saveSnapshot(root: string, snapshot: RepositorySnapshot): Promise<void> {

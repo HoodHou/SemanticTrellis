@@ -22,8 +22,8 @@ See `examples/curation-patch.example.json` for a minimal patch.
 
 Create or replace a semantic node by stable ID.
 
-Replacing an existing locked node requires `overrideLocked: true` on the
-operation. New locked nodes do not require an override.
+Changing an existing locked node requires `overrideLocked: true` on the
+operation. An identical upsert and a new locked node do not require an override.
 
 ### `remove-node`
 

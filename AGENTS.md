@@ -42,6 +42,8 @@ Before changing architecture or storage behavior, read:
   and the curated graph audit is clean.
 - Every node must be able to cite repository-relative source paths.
 - New storage formats require a schema version and an ADR.
+- ADR identifiers are immutable after publication; gaps are allowed when a
+  proposal is withdrawn or intentionally excluded.
 
 ## Verification
 

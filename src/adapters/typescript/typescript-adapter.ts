@@ -11,7 +11,7 @@ import type {
 } from "../../domain/structural.js";
 import type { LanguageAdapter, LanguageExtractionInput } from "../../ports/language-adapter.js";
 
-const VERSION = `typescript-compiler-${ts.version}-v1`;
+const VERSION = `typescript-compiler-${ts.version}-v2`;
 const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 interface Scope {
@@ -54,6 +54,30 @@ function isModuleVariable(node: ts.VariableDeclaration): boolean {
     (ts.isSourceFile(statement.parent) || ts.isModuleBlock(statement.parent));
 }
 
+function callbackDescriptor(
+  node: ts.ArrowFunction | ts.FunctionExpression,
+  file: ts.SourceFile,
+): SymbolDescriptor | null {
+  const call = node.parent;
+  if (!ts.isCallExpression(call)) return null;
+  const argumentIndex = call.arguments.indexOf(node);
+  if (argumentIndex < 0) return null;
+  const calleeText = call.expression.getText(file).replace(/\s+/g, " ").trim();
+  const callee = calleeText.split(".").at(-1) ?? calleeText;
+  const firstArgument = call.arguments[0];
+  const label = firstArgument !== undefined &&
+    (ts.isStringLiteral(firstArgument) || ts.isNoSubstitutionTemplateLiteral(firstArgument))
+    ? firstArgument.text.replace(/\s+/g, " ").trim().slice(0, 120)
+    : null;
+  return {
+    name: label === null
+      ? `${callee} callback ${argumentIndex + 1}`
+      : `${callee} ${JSON.stringify(label)}`,
+    kind: "callback",
+    opensScope: true,
+  };
+}
+
 function descriptor(node: ts.Node, file: ts.SourceFile): SymbolDescriptor | null {
   if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
     const name = nameText(node.name, file);
@@ -71,9 +95,16 @@ function descriptor(node: ts.Node, file: ts.SourceFile): SymbolDescriptor | null
   if (ts.isModuleDeclaration(node)) {
     return { name: node.name.getText(file).replace(/["']/g, ""), kind: "module", opensScope: true };
   }
-  if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) {
+  if (ts.isFunctionDeclaration(node)) {
     const name = nameText(node.name, file);
     return name === null ? null : { name, kind: "function", opensScope: true };
+  }
+  if (ts.isFunctionExpression(node) && node.name !== undefined) {
+    return { name: node.name.text, kind: "function", opensScope: true };
+  }
+  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+    const callback = callbackDescriptor(node, file);
+    if (callback !== null) return callback;
   }
   if (
     ts.isMethodDeclaration(node) ||
@@ -159,7 +190,7 @@ function reference(
 ): StructuralReference {
   const position = referencePosition(node, file);
   return {
-    id: `${path}#ref:${position.line}:${position.column}:${kind}:${targetName}:${ordinal}`,
+    id: `${ownerSymbolId}#ref:${kind}:${targetName}:${ordinal}`,
     path,
     ownerSymbolId,
     kind,
@@ -196,7 +227,17 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
     const symbols: StructuralSymbol[] = [fileSymbol];
     const references: StructuralReference[] = [];
     const duplicateCounts = new Map<string, number>();
-    let referenceOrdinal = 0;
+    const referenceCounts = new Map<string, number>();
+    const referenceOrdinal = (
+      ownerSymbolId: string,
+      kind: StructuralReferenceKind,
+      targetName: string,
+    ): number => {
+      const key = `${ownerSymbolId}|${kind}|${targetName}`;
+      const ordinal = referenceCounts.get(key) ?? 0;
+      referenceCounts.set(key, ordinal + 1);
+      return ordinal;
+    };
 
     const visit = (node: ts.Node, scope: Scope): void => {
       const found = descriptor(node, file);
@@ -233,7 +274,7 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
           "call",
           target.name,
           target.qualifier,
-          referenceOrdinal++,
+          referenceOrdinal(childScope.ownerSymbolId, "call", target.name),
         ));
       } else if (ts.isNewExpression(node)) {
         const target = callTarget(node.expression, file);
@@ -245,7 +286,7 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
           "construct",
           target.name,
           target.qualifier,
-          referenceOrdinal++,
+          referenceOrdinal(childScope.ownerSymbolId, "construct", target.name),
         ));
       } else if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
         references.push(reference(
@@ -256,7 +297,7 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
           "import",
           node.moduleSpecifier.text,
           node.moduleSpecifier.text,
-          referenceOrdinal++,
+          referenceOrdinal(fileSymbol.id, "import", node.moduleSpecifier.text),
         ));
       } else if (ts.isHeritageClause(node)) {
         const kind: StructuralReferenceKind = node.token === ts.SyntaxKind.ExtendsKeyword
@@ -272,7 +313,7 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
             kind,
             target.name,
             target.qualifier,
-            referenceOrdinal++,
+            referenceOrdinal(childScope.ownerSymbolId, kind, target.name),
           ));
         }
       }
@@ -284,6 +325,8 @@ export class TypeScriptLanguageAdapter implements LanguageAdapter {
     return {
       path: input.path,
       hash: input.hash,
+      sourceSize: input.size ?? Buffer.byteLength(input.source, "utf8"),
+      sourceMtimeMs: input.mtimeMs ?? 0,
       language: this.id,
       extractorVersion: this.version,
       symbols,

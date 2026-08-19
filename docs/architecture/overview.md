@@ -43,10 +43,15 @@ local snapshot. It emits added, changed, and removed files and maps those files
 to curated nodes through source provenance.
 
 Symbol-level maintenance removes a changed file's previous contribution and
-inserts the new one while replaying unchanged contributions. The current
-resolver deterministically rebuilds edges from the merged contributions; the
-next optimization will re-resolve only definition and reference keys touched by
-the delta.
+inserts the new one while replaying unchanged contributions. A persisted
+target-name reverse index identifies unchanged files whose references may be
+affected by changed definitions. Only changed and affected files are re-resolved;
+an unchanged refresh skips edge resolution and index persistence entirely.
+
+Read queries use the cached in-process index, probe Git deltas or source stats,
+and repair stale contributions once before retrying. Source reads are verified
+and cached by content hash. This keeps MCP and CLI behavior consistent while
+preserving exact stale-source detection.
 
 ### Curator proposals
 

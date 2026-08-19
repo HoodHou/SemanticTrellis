@@ -37,7 +37,12 @@ async function fixture(): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 50,
+  })));
 });
 
 describe("structural contributions", () => {
@@ -49,11 +54,17 @@ describe("structural contributions", () => {
       filesSupported: 2,
       parsedFiles: 2,
       reusedFiles: 0,
+      resolvedFiles: 2,
     });
     expect(cold.metrics.edges).toBeGreaterThanOrEqual(2);
 
     const warm = await buildStructuralIndex(root);
-    expect(warm.metrics).toMatchObject({ parsedFiles: 0, reusedFiles: 2, removedFiles: 0 });
+    expect(warm.metrics).toMatchObject({
+      parsedFiles: 0,
+      reusedFiles: 2,
+      removedFiles: 0,
+      resolvedFiles: 0,
+    });
 
     await writeFile(
       join(root, "src", "main.ts"),
@@ -61,7 +72,27 @@ describe("structural contributions", () => {
       "utf8",
     );
     const changed = await buildStructuralIndex(root);
-    expect(changed.metrics).toMatchObject({ parsedFiles: 1, reusedFiles: 1, removedFiles: 0 });
+    expect(changed.metrics).toMatchObject({
+      parsedFiles: 1,
+      reusedFiles: 1,
+      removedFiles: 0,
+      resolvedFiles: 1,
+    });
+
+    await writeFile(
+      join(root, "src", "helper.ts"),
+      "export function helperRenamed(): number { return 1; }\n",
+      "utf8",
+    );
+    const definitionChanged = await buildStructuralIndex(root);
+    expect(definitionChanged.metrics).toMatchObject({
+      parsedFiles: 1,
+      reusedFiles: 1,
+      resolvedFiles: 2,
+    });
+    expect(
+      definitionChanged.index.edges.some((edge) => edge.to.endsWith("#function:helper")),
+    ).toBe(false);
   });
 
   it("groups grep hits by symbol, attributes curated context, and traces callers", async () => {
@@ -108,7 +139,42 @@ describe("structural contributions", () => {
     expect(trace.symbols.some((symbol) => symbol.name === "main")).toBe(true);
   });
 
-  it("rejects cached grep when source bytes changed after the structural build", async () => {
+  it("returns columns and bounded source while prioritizing coupled groups before truncation", async () => {
+    const root = await fixture();
+    await writeFile(join(root, "src", "a-low.ts"), "export const needle = true;\n", "utf8");
+    await writeFile(
+      join(root, "src", "z-high.ts"),
+      "export function target(): boolean { const needle = true; return needle; }\n",
+      "utf8",
+    );
+    await writeFile(
+      join(root, "src", "target-caller.ts"),
+      'import { target } from "./z-high.js";\nexport const result = target();\n',
+      "utf8",
+    );
+    await buildStructuralIndex(root);
+
+    const grep = await grepStructure(root, "needle", {
+      fixed: true,
+      pathPrefix: "src",
+      limit: 1,
+      contextLines: 1,
+      includeBody: true,
+      maxSourceCharacters: 2_000,
+    });
+    expect(grep.groups).toHaveLength(1);
+    expect(grep.groups[0]).toMatchObject({ symbolName: "target", inDegree: 1 });
+    expect(grep.groups[0]?.hits[0]).toMatchObject({ column: 43, matchLength: 6 });
+    expect(grep.groups[0]?.hits[0]?.context?.text).toContain("needle");
+    expect(grep.groups[0]?.sourceContext?.text).toContain("function target");
+    expect(grep.truncatedHits).toBe(2);
+
+    await expect(
+      grepStructure(root, "(a+)+$", { fixed: false, pathPrefix: "src" }),
+    ).rejects.toThrow(/potentially catastrophic/);
+  });
+
+  it("rejects stale cache when repair is disabled and repairs it by default", async () => {
     const root = await fixture();
     await buildStructuralIndex(root);
     await writeFile(
@@ -118,7 +184,39 @@ describe("structural contributions", () => {
     );
 
     await expect(
-      grepStructure(root, "helper", { fixed: true, pathPrefix: "src", refresh: false }),
+      grepStructure(root, "helper", {
+        fixed: true,
+        pathPrefix: "src",
+        refresh: false,
+        repairStale: false,
+      }),
     ).rejects.toThrow(/Structural index is stale/);
+
+    const repaired = await grepStructure(root, "changed", {
+      fixed: true,
+      pathPrefix: "src",
+      refresh: false,
+    });
+    expect(repaired.groups).toEqual(
+      expect.arrayContaining([expect.objectContaining({ symbolName: "changed" })]),
+    );
+  });
+
+  it("discovers and indexes a newly added Git-visible source during a query", async () => {
+    const root = await fixture();
+    await buildStructuralIndex(root);
+    await writeFile(
+      join(root, "src", "new-source.ts"),
+      "export function newlyAdded(): boolean { return true; }\n",
+      "utf8",
+    );
+
+    const result = await grepStructure(root, "newlyAdded", {
+      fixed: true,
+      pathPrefix: "src",
+    });
+    expect(result.groups).toEqual(
+      expect.arrayContaining([expect.objectContaining({ symbolName: "newlyAdded" })]),
+    );
   });
 });
