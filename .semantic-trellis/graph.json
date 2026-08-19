@@ -255,7 +255,7 @@
       "id": "language-extraction-adapters",
       "name": "Language Extraction Adapters",
       "kind": "component",
-      "summary": "Defines pinned Compiler API and Tree-sitter adapters that turn TypeScript, JavaScript, C#, Python, and Python stubs into cacheable contributions with stable scopes, references, call shape, diagnostics, callbacks, partial identity, imports, decorators, and dynamic invokes.",
+      "summary": "Defines pinned Compiler API and Tree-sitter adapters that turn TypeScript, JavaScript, C#, Python, Python stubs, and Lua into cacheable contributions with stable scopes, references, call shape, diagnostics, callbacks, partial identity, imports, decorators, Lua module tables, require imports, and dynamic invokes.",
       "sources": [
         {
           "path": "src/ports/language-adapter.ts",
@@ -278,6 +278,10 @@
           "role": "primary"
         },
         {
+          "path": "src/adapters/lua/lua-adapter.ts",
+          "role": "primary"
+        },
+        {
           "path": "src/structural/registry.ts",
           "role": "primary"
         },
@@ -292,6 +296,10 @@
         {
           "path": "docs/adr/0013-python-structural-contributions.md",
           "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0014-lua-structural-contributions.md",
+          "role": "supporting"
         }
       ],
       "tags": [
@@ -299,6 +307,7 @@
         "typescript",
         "csharp",
         "python",
+        "lua",
         "tree-sitter",
         "adapter",
         "structural",
@@ -450,7 +459,7 @@
       "id": "structural-index-engine",
       "name": "Structural Index Engine",
       "kind": "subsystem",
-      "summary": "Maintains cached mixed-language structural contributions, precise delta propagation, conservative call, construct, and dynamic invoke resolution, package-aware imports, IDF ranking, exact grep and trace, and compact one-call ask retrieval.",
+      "summary": "Maintains cached mixed-language structural contributions, precise delta propagation, conservative call, construct, and dynamic invoke resolution, package-aware imports, Lua require paths and lexical module resolution, IDF ranking, exact grep and trace, and compact one-call ask retrieval.",
       "sources": [
         {
           "path": "src/domain/structural.ts",
@@ -511,6 +520,7 @@
         "overload",
         "partial",
         "python",
+        "lua",
         "invoke"
       ],
       "status": "approved",
@@ -520,7 +530,7 @@
       "id": "verification-suite",
       "name": "Verification Suite",
       "kind": "component",
-      "summary": "Verifies lifecycle and graph integrity, TypeScript and C# extraction, Python declarations and packages, dynamic invokes, encoding cookies, stable identities, incremental maintenance, ranking and crux quality, concurrency, and the complete MCP workflow.",
+      "summary": "Verifies lifecycle and graph integrity, TypeScript and C# extraction, Python and Lua declarations and packages, dynamic invokes, encoding cookies, stable identities, incremental maintenance, ranking and crux quality, concurrency, and the complete MCP workflow.",
       "sources": [
         {
           "path": "test/agent-bootstrap.test.ts",
@@ -573,6 +583,10 @@
         {
           "path": "test/python-adapter.test.ts",
           "role": "primary"
+        },
+        {
+          "path": "test/lua-adapter.test.ts",
+          "role": "primary"
         }
       ],
       "tags": [
@@ -582,6 +596,7 @@
         "structural",
         "csharp",
         "python",
+        "lua",
         "ai-bootstrap",
         "incremental",
         "encoding",

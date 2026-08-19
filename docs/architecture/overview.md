@@ -35,7 +35,9 @@ diagnostics, the source hash, and the exact extractor identity. TypeScript and
 JavaScript use the TypeScript Compiler API adapter. C# uses the ast-grep Node API
 with its prebuilt Tree-sitter C# grammar. Python uses the same runtime with a
 prebuilt Tree-sitter Python grammar and represents dynamically ambiguous calls
-as conservative `invoke` references. Other languages plug into the same registry.
+as conservative `invoke` references. Lua uses a prebuilt Tree-sitter Lua grammar
+and models module tables, callbacks, `require` imports, and dynamic invocation in
+the same contribution format. Other languages plug into the same registry.
 
 ### Change set and impact
 

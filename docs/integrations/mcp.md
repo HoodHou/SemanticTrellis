@@ -19,9 +19,9 @@ node dist/mcp/stdio.js /absolute/path/to/repository
 The process waits for an MCP host on standard input. Standard output is reserved
 for protocol messages; diagnostics are written to standard error.
 
-Structural tools support TypeScript, JavaScript, C#, Python, and Python stubs
-through the same fixed-repository index. Python dynamic calls are exposed as
-conservative `invoke` edges.
+Structural tools support TypeScript, JavaScript, C#, Python, Python stubs, and
+Lua through the same fixed-repository index. Python and Lua dynamic calls are
+exposed as conservative `invoke` edges.
 
 ## Tools
 

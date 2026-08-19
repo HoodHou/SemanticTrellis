@@ -42,7 +42,7 @@ The current implementation provides a working local vertical slice:
 - expose the curated graph and guarded maintenance workflow over MCP.
 - drive a resumable, full-repository AI review through an MCP-connected Agent.
 
-Agent-driven AI bootstrap, TypeScript, JavaScript, C#, and Python structural
+Agent-driven AI bootstrap, TypeScript, JavaScript, C#, Python, and Lua structural
 extraction, and MCP are available. Direct model-provider adapters, additional
 languages, and a visual curator remain later milestones.
 
@@ -117,10 +117,12 @@ require a validation token tied to the exact patch and current graph state.
 
 The disposable structural layer uses the TypeScript Compiler API for TypeScript
 and JavaScript and the ast-grep Node API with a prebuilt Tree-sitter grammar for
-C# and Python. Python support includes `.py` and `.pyi`, packages, relative
+C#, Python, and Lua. Python support includes `.py` and `.pyi`, packages, relative
 imports, decorators, async and nested functions, and conservative dynamic
-`invoke` edges. Each file owns its symbols, parser diagnostics, and unresolved references;
-unchanged contributions are reused by stat-assisted content hashes. Queries
+`invoke` edges. Lua support includes module tables, dot and colon methods,
+anonymous callbacks, and `require` imports. Each file owns its symbols, parser
+diagnostics, and unresolved references; unchanged contributions are reused by
+stat-assisted content hashes. Queries
 repair stale deltas automatically, cache verified source and parsed indexes in
 long-lived MCP processes, decode byte-order-marked source, and can return bounded
 context or complete symbol bodies. `ask` combines IDF-weighted natural-language

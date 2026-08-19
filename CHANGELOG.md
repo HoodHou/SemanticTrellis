@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.1 - 2026-08-19
+
+### Added
+
+- AST-backed Lua extraction through the prebuilt ast-grep Tree-sitter grammar.
+- Lua module tables, local and nested functions, dot and colon methods,
+  function assignments, labelled callbacks, variables, fields, `require`
+  imports, and dynamic invokes.
+- Lua module resolution for dotted require paths, direct files, unique source
+  roots, and `init.lua` packages.
+- Same-file qualified-target preference and lexical prefix fallback for common
+  module-table and `self:method()` call chains.
+
 ## 0.8.0 - 2026-08-19
 
 ### Added

@@ -1,5 +1,6 @@
 import { extname } from "node:path";
 import { CSharpLanguageAdapter } from "../adapters/csharp/csharp-adapter.js";
+import { LuaLanguageAdapter } from "../adapters/lua/lua-adapter.js";
 import { PythonLanguageAdapter } from "../adapters/python/python-adapter.js";
 import { TypeScriptLanguageAdapter } from "../adapters/typescript/typescript-adapter.js";
 import type { LanguageAdapter } from "../ports/language-adapter.js";
@@ -27,6 +28,7 @@ export class LanguageRegistry {
 export function createDefaultLanguageRegistry(): LanguageRegistry {
   return new LanguageRegistry([
     new CSharpLanguageAdapter(),
+    new LuaLanguageAdapter(),
     new PythonLanguageAdapter(),
     new TypeScriptLanguageAdapter(),
   ]);

@@ -119,12 +119,26 @@ function scopedTarget(
     );
     if (selected.target !== null) return { target: selected.target, ambiguous: false };
     ambiguous ||= selected.ambiguous;
+    const parts = scope.qualifiedName.split(".");
+    for (let length = parts.length - 1; length > 0; length -= 1) {
+      const prefix = parts.slice(0, length).join(".");
+      const prefixed = selectUnique(
+        reference,
+        byQualifiedName.get(`${prefix}.${reference.targetName}`) ?? [],
+      );
+      if (prefixed.target !== null) return { target: prefixed.target, ambiguous: false };
+      ambiguous ||= prefixed.ambiguous;
+    }
     scope = scope.parentId === null ? undefined : byId.get(scope.parentId);
   }
   return { target: null, ambiguous };
 }
 
 function moduleCandidates(sourcePath: string, target: string): string[] {
+  if (sourcePath.endsWith(".lua")) {
+    const modulePath = target.replace(/\\/g, "/").replace(/\./g, "/").replace(/^\/+/, "");
+    return [`${modulePath}.lua`, `${modulePath}/init.lua`];
+  }
   if (/\.pyi?$/.test(sourcePath)) {
     const prefix = target.match(/^\.+/)?.[0] ?? "";
     const moduleName = target.slice(prefix.length);
@@ -221,15 +235,20 @@ export function resolveStructuralGraph(
         target = resolveImport(reference, contributions);
       }
       if (target === null && reference.targetQualifier !== null) {
+        const qualifiedCandidates = byQualifiedName.get(reference.targetQualifier) ?? [];
+        const localExact = selectUnique(
+          reference,
+          qualifiedCandidates.filter((symbol) => symbol.path === reference.path),
+        );
         const exact = selectUnique(
           reference,
-          byQualifiedName.get(reference.targetQualifier) ?? [],
+          qualifiedCandidates,
         );
-        const suffix = exact.target === null
+        const suffix = localExact.target === null && exact.target === null
           ? selectUnique(reference, byQualifiedSuffix.get(reference.targetQualifier) ?? [])
           : { target: null, ambiguous: false };
-        target = exact.target ?? suffix.target;
-        ambiguous ||= exact.ambiguous || suffix.ambiguous;
+        target = localExact.target ?? exact.target ?? suffix.target;
+        ambiguous ||= localExact.ambiguous || exact.ambiguous || suffix.ambiguous;
       }
       const qualifier = reference.targetQualifier;
       const explicitlyScoped = qualifier?.startsWith("this.") === true ||

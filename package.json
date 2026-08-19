@@ -1,6 +1,6 @@
 {
   "name": "semantic-trellis",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "A curated semantic graph that learns a codebase once and maintains only its deltas.",
   "type": "module",
@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@ast-grep/lang-csharp": "0.0.6",
+    "@ast-grep/lang-lua": "0.0.7",
     "@ast-grep/lang-python": "^0.0.6",
     "@ast-grep/napi": "0.45.1",
     "@modelcontextprotocol/server": "^2.0.0",

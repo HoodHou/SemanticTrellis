@@ -344,4 +344,62 @@ describe("structural contributions", () => {
       ]),
     );
   });
+
+  it("serves Lua modules, invokes, grep attribution, traces, and ask contexts", async () => {
+    const root = await fixture();
+    await writeFile(
+      join(root, "src", "service.lua"),
+      `local Service = {}
+function Service.process(value)
+  return value
+end
+function Service.run(value)
+  return Service.process(value)
+end
+return Service
+`,
+      "utf8",
+    );
+    const built = await buildStructuralIndex(root);
+    const lua = built.index.contributions["src/service.lua"];
+    expect(lua).toMatchObject({ language: "lua" });
+    expect(lua?.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "module", qualifiedName: "Service" }),
+        expect.objectContaining({ kind: "method", qualifiedName: "Service.process" }),
+        expect.objectContaining({ kind: "method", qualifiedName: "Service.run" }),
+      ]),
+    );
+
+    const grep = await grepStructure(root, "process(", {
+      fixed: true,
+      pathPrefix: "src",
+      repairStale: false,
+    });
+    expect(grep.totalHits).toBe(2);
+    expect(grep.symbolAttributionRate).toBe(1);
+
+    const trace = traceStructuralGraph(built.index, "Service.process", "incoming", 1);
+    expect(trace.edges).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "invoke" })]),
+    );
+    expect(trace.symbols).toEqual(
+      expect.arrayContaining([expect.objectContaining({ qualifiedName: "Service.run" })]),
+    );
+
+    const ask = await askProject(root, "Lua service process", {
+      pathPrefix: "src",
+      repairStale: false,
+    });
+    expect(ask.hits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({ qualifiedName: "Service.process" }),
+        }),
+      ]),
+    );
+    expect(ask.sourceContexts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "src/service.lua" })]),
+    );
+  });
 });
