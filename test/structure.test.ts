@@ -288,4 +288,60 @@ describe("structural contributions", () => {
     ).toBeGreaterThan(8);
     expect(fullSource?.context.truncated).toBe(false);
   });
+
+  it("serves Python symbols, invokes, grep attribution, traces, and ask contexts", async () => {
+    const root = await fixture();
+    await writeFile(
+      join(root, "src", "worker.py"),
+      `class Worker:
+    def process(self, value):
+        return value
+
+    def run(self, value):
+        return self.process(value)
+`,
+      "utf8",
+    );
+    const built = await buildStructuralIndex(root);
+    const python = built.index.contributions["src/worker.py"];
+    expect(python).toMatchObject({ language: "python" });
+    expect(python?.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "class", qualifiedName: "Worker" }),
+        expect.objectContaining({ kind: "method", qualifiedName: "Worker.process" }),
+        expect.objectContaining({ kind: "method", qualifiedName: "Worker.run" }),
+      ]),
+    );
+
+    const grep = await grepStructure(root, "process(", {
+      fixed: true,
+      pathPrefix: "src",
+      repairStale: false,
+    });
+    expect(grep.totalHits).toBe(2);
+    expect(grep.symbolAttributionRate).toBe(1);
+
+    const trace = traceStructuralGraph(built.index, "Worker.process", "incoming", 1);
+    expect(trace.edges).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "invoke" })]),
+    );
+    expect(trace.symbols).toEqual(
+      expect.arrayContaining([expect.objectContaining({ qualifiedName: "Worker.run" })]),
+    );
+
+    const ask = await askProject(root, "Python worker process", {
+      pathPrefix: "src",
+      repairStale: false,
+    });
+    expect(ask.hits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ symbol: expect.objectContaining({ qualifiedName: "Worker.process" }) }),
+      ]),
+    );
+    expect(ask.sourceContexts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "src/worker.py" }),
+      ]),
+    );
+  });
 });

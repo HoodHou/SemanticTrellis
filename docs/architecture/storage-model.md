@@ -47,11 +47,12 @@ Disposable per-file structural contributions and their resolved edges. Each
 contribution is keyed by repository-relative path, source hash, language, and
 extractor version and contains symbols, unresolved references, and parser
 diagnostics. Callable symbols include accepted argument ranges, references
-include observed argument counts, and C# declarations record partial identity.
+include observed argument counts, C# declarations record partial identity, and
+Python dynamic calls use the `invoke` relation.
 The index also stores repository revision/untracked state, per-file resolution
 metrics, and target-name reverse references for incremental edge repair. An
 unchanged file reuses its contribution without parsing. The
-current structural cache schema is version 6; older local indexes are discarded
+current structural cache schema is version 7; older local indexes are discarded
 and rebuilt.
 
 ### `.semantic-trellis/local/agent-bootstrap.json`

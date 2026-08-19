@@ -186,7 +186,7 @@ async function readFrozenSource(root: string, path: string, expectedHash: string
       `Source changed after the bootstrap snapshot: ${path}. Start or resume bootstrap again.`,
     );
   }
-  return decodeSourceText(bytes);
+  return decodeSourceText(bytes, path);
 }
 
 async function requireSession(root: string): Promise<AgentBootstrapSession> {

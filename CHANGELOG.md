@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0 - 2026-08-19
+
+### Added
+
+- AST-backed Python and Python stub extraction through the prebuilt ast-grep
+  Tree-sitter grammar.
+- Python classes, functions, async and nested functions, methods, constructors,
+  properties, decorators, inheritance, imports, and dynamic invocation facts.
+- The language-neutral `invoke` reference kind for calls that may target either
+  callable symbols or classes without speculative construction inference.
+- Absolute, relative, source-root-suffix, and `__init__` Python module
+  resolution.
+- Python encoding-cookie decoding and default exclusions for virtual
+  environments, type-checker caches, test caches, and `__pycache__`.
+
+### Changed
+
+- Structural cache schema is version 7.
+
 ## 0.7.0 - 2026-08-19
 
 ### Fixed

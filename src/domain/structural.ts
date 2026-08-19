@@ -1,4 +1,4 @@
-export const STRUCTURAL_SCHEMA_VERSION = 6 as const;
+export const STRUCTURAL_SCHEMA_VERSION = 7 as const;
 
 export type StructuralSymbolKind =
   | "file"
@@ -23,6 +23,7 @@ export type StructuralSymbolKind =
 
 export type StructuralReferenceKind =
   | "call"
+  | "invoke"
   | "construct"
   | "import"
   | "extends"

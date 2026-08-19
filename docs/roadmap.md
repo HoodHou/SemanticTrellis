@@ -12,7 +12,7 @@
 ## Milestone 1 - Structural contributions
 
 - [x] Add Git-aware repository discovery.
-- [x] Introduce TypeScript/JavaScript and C# parser adapters with a shared
+- [x] Introduce TypeScript/JavaScript, C#, and Python parser adapters with a shared
   language registry.
 - [x] Store per-file symbol and relationship contributions.
 - [x] Re-resolve only changed files and files that reference changed definition

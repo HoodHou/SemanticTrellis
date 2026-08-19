@@ -48,7 +48,7 @@ export async function readVerifiedSource(
     sourceCache.delete(absolutePath);
     throw new SourceHashMismatchError(path, expectedHash, actualHash);
   }
-  const source = decodeSourceText(bytes);
+  const source = decodeSourceText(bytes, path);
   sourceCache.set(absolutePath, {
     hash: actualHash,
     size: fileStat.size,

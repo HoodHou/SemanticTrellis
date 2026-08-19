@@ -20,6 +20,7 @@ const DEFAULT_EXTENSIONS = [
   ".proto",
   ".ps1",
   ".py",
+  ".pyi",
   ".rb",
   ".rs",
   ".sh",
@@ -34,12 +35,18 @@ const DEFAULT_EXTENSIONS = [
 
 const DEFAULT_EXCLUDED_DIRECTORIES = [
   ".git",
+  ".claude",
   ".codex",
   ".semantic-trellis",
   ".idea",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
   ".vscode",
   "Library",
   "Temp",
+  "__pycache__",
   "build",
   "coverage",
   "dist",
@@ -48,6 +55,7 @@ const DEFAULT_EXCLUDED_DIRECTORIES = [
   "obj",
   "out",
   "target",
+  "venv",
   "vendor",
 ] as const;
 

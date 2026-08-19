@@ -257,6 +257,7 @@ export async function buildStructuralIndex(root: string): Promise<StructuralBuil
     }
     const source = scan.sources[file.path] ?? decodeSourceText(
       await readFile(resolve(absoluteRoot, file.path)),
+      file.path,
     );
     contributions[file.path] = adapter.extract({
       path: file.path,

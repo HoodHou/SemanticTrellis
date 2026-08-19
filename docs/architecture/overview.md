@@ -33,8 +33,9 @@ The structural index stores one disposable contribution per supported source
 file. A contribution contains symbols, unresolved references, non-fatal parser
 diagnostics, the source hash, and the exact extractor identity. TypeScript and
 JavaScript use the TypeScript Compiler API adapter. C# uses the ast-grep Node API
-with its prebuilt Tree-sitter C# grammar. Other languages plug into the same
-registry.
+with its prebuilt Tree-sitter C# grammar. Python uses the same runtime with a
+prebuilt Tree-sitter Python grammar and represents dynamically ambiguous calls
+as conservative `invoke` references. Other languages plug into the same registry.
 
 ### Change set and impact
 

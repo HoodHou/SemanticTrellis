@@ -255,7 +255,7 @@
       "id": "language-extraction-adapters",
       "name": "Language Extraction Adapters",
       "kind": "component",
-      "summary": "Defines pinned Compiler API and Tree-sitter adapters that turn TypeScript, JavaScript, and C# into cacheable contributions with stable references, parser diagnostics, callback scopes, callable argument ranges, observed call counts, and C# partial declaration identity.",
+      "summary": "Defines pinned Compiler API and Tree-sitter adapters that turn TypeScript, JavaScript, C#, Python, and Python stubs into cacheable contributions with stable scopes, references, call shape, diagnostics, callbacks, partial identity, imports, decorators, and dynamic invokes.",
       "sources": [
         {
           "path": "src/ports/language-adapter.ts",
@@ -274,6 +274,10 @@
           "role": "primary"
         },
         {
+          "path": "src/adapters/python/python-adapter.ts",
+          "role": "primary"
+        },
+        {
           "path": "src/structural/registry.ts",
           "role": "primary"
         },
@@ -284,18 +288,24 @@
         {
           "path": "docs/adr/0008-csharp-tree-sitter-contributions.md",
           "role": "supporting"
+        },
+        {
+          "path": "docs/adr/0013-python-structural-contributions.md",
+          "role": "supporting"
         }
       ],
       "tags": [
         "parser",
         "typescript",
         "csharp",
+        "python",
         "tree-sitter",
         "adapter",
         "structural",
         "callback",
         "arity",
-        "partial"
+        "partial",
+        "invoke"
       ],
       "status": "approved",
       "locked": true
@@ -343,7 +353,7 @@
       "id": "repository-infrastructure",
       "name": "Repository Infrastructure",
       "kind": "subsystem",
-      "summary": "Owns Git-aware discovery and delta probes, stat-assisted exact hashing, BOM-aware source decoding, validated persistence, parsed graph caching, verified source caching, project layout, and disposable local-state boundaries.",
+      "summary": "Owns Git-aware discovery, stat-assisted exact hashing, BOM and Python encoding-cookie decoding, language-environment exclusions, validated persistence, graph and source caches, project layout, and disposable local-state boundaries.",
       "sources": [
         {
           "path": "src/infrastructure/repository-scanner.ts",
@@ -384,7 +394,8 @@
         "persistence",
         "cache",
         "git",
-        "encoding"
+        "encoding",
+        "python"
       ],
       "status": "approved",
       "locked": true
@@ -439,7 +450,7 @@
       "id": "structural-index-engine",
       "name": "Structural Index Engine",
       "kind": "subsystem",
-      "summary": "Maintains cached per-file structural contributions, precise delta propagation, arity and partial-type resolution, IDF and intent-aware ranking, exact grep and trace, and one-call ask with compact query-aware cruxes or explicit full bodies.",
+      "summary": "Maintains cached mixed-language structural contributions, precise delta propagation, conservative call, construct, and dynamic invoke resolution, package-aware imports, IDF ranking, exact grep and trace, and compact one-call ask retrieval.",
       "sources": [
         {
           "path": "src/domain/structural.ts",
@@ -498,7 +509,9 @@
         "cache",
         "incremental",
         "overload",
-        "partial"
+        "partial",
+        "python",
+        "invoke"
       ],
       "status": "approved",
       "locked": true
@@ -507,7 +520,7 @@
       "id": "verification-suite",
       "name": "Verification Suite",
       "kind": "component",
-      "summary": "Verifies lifecycle and graph integrity, selected-review token concurrency, provenance severities, IDF and test-intent ranking, compact query-aware ask cruxes, C# resolution, stale repair, and the complete MCP workflow.",
+      "summary": "Verifies lifecycle and graph integrity, TypeScript and C# extraction, Python declarations and packages, dynamic invokes, encoding cookies, stable identities, incremental maintenance, ranking and crux quality, concurrency, and the complete MCP workflow.",
       "sources": [
         {
           "path": "test/agent-bootstrap.test.ts",
@@ -556,6 +569,10 @@
         {
           "path": "test/csharp-adapter.test.ts",
           "role": "primary"
+        },
+        {
+          "path": "test/python-adapter.test.ts",
+          "role": "primary"
         }
       ],
       "tags": [
@@ -564,6 +581,7 @@
         "mcp",
         "structural",
         "csharp",
+        "python",
         "ai-bootstrap",
         "incremental",
         "encoding",

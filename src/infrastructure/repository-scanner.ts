@@ -190,7 +190,7 @@ export async function scanRepositoryDetailed(
     }
     const bytes = await readFile(candidate.absolutePath);
     if (options.captureSource?.(candidate.relativePath) === true) {
-      sources[candidate.relativePath] = decodeSourceText(bytes);
+      sources[candidate.relativePath] = decodeSourceText(bytes, candidate.relativePath);
     }
     return {
       path: candidate.relativePath,

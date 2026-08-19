@@ -14,6 +14,10 @@ const CALL_TARGET_KINDS = new Set<StructuralSymbol["kind"]>([
   "operator",
   "delegate",
 ]);
+const INVOKE_TARGET_KINDS = new Set<StructuralSymbol["kind"]>([
+  ...CALL_TARGET_KINDS,
+  "class",
+]);
 const CONSTRUCT_TARGET_KINDS = new Set<StructuralSymbol["kind"]>([
   "class",
   "struct",
@@ -48,6 +52,8 @@ function validTarget(reference: StructuralReference, symbol: StructuralSymbol): 
   switch (reference.kind) {
     case "call":
       return CALL_TARGET_KINDS.has(symbol.kind);
+    case "invoke":
+      return INVOKE_TARGET_KINDS.has(symbol.kind);
     case "construct":
       return CONSTRUCT_TARGET_KINDS.has(symbol.kind);
     case "extends":
@@ -119,6 +125,24 @@ function scopedTarget(
 }
 
 function moduleCandidates(sourcePath: string, target: string): string[] {
+  if (/\.pyi?$/.test(sourcePath)) {
+    const prefix = target.match(/^\.+/)?.[0] ?? "";
+    const moduleName = target.slice(prefix.length);
+    let baseDirectory = prefix.length > 0 ? dirname(sourcePath).replace(/\\/g, "/") : "";
+    for (let level = 1; level < prefix.length; level += 1) {
+      baseDirectory = dirname(baseDirectory).replace(/\\/g, "/");
+    }
+    const modulePath = moduleName.replace(/\./g, "/");
+    const base = posix.normalize(
+      baseDirectory.length > 0 ? posix.join(baseDirectory, modulePath) : modulePath,
+    );
+    return [
+      `${base}.py`,
+      `${base}.pyi`,
+      `${base}/__init__.py`,
+      `${base}/__init__.pyi`,
+    ];
+  }
   if (!target.startsWith(".")) return [];
   const base = posix.normalize(posix.join(dirname(sourcePath).replace(/\\/g, "/"), target));
   const withoutRuntimeExtension = base.replace(/\.(?:js|mjs|cjs)$/, "");
@@ -138,11 +162,19 @@ function resolveImport(
   reference: StructuralReference,
   contributions: Record<string, FileContribution>,
 ): StructuralSymbol | null {
-  for (const candidate of moduleCandidates(reference.path, reference.targetName)) {
+  const candidates = moduleCandidates(reference.path, reference.targetName);
+  for (const candidate of candidates) {
     const contribution = contributions[candidate];
     const file = contribution?.symbols.find((symbol) => symbol.kind === "file");
     if (file !== undefined) return file;
   }
+  const suffixMatches = Object.values(contributions)
+    .filter((contribution) =>
+      candidates.some((candidate) => contribution.path.endsWith(`/${candidate}`)),
+    )
+    .map((contribution) => contribution.symbols.find((symbol) => symbol.kind === "file"))
+    .filter((symbol): symbol is StructuralSymbol => symbol !== undefined);
+  if (suffixMatches.length === 1) return suffixMatches[0] ?? null;
   return null;
 }
 
@@ -201,7 +233,9 @@ export function resolveStructuralGraph(
       }
       const qualifier = reference.targetQualifier;
       const explicitlyScoped = qualifier?.startsWith("this.") === true ||
-        qualifier?.startsWith("base.") === true;
+        qualifier?.startsWith("base.") === true ||
+        qualifier?.startsWith("self.") === true ||
+        qualifier?.startsWith("cls.") === true;
       const hasUnknownReceiver = qualifier !== null &&
         qualifier !== reference.targetName &&
         qualifier.includes(".") &&

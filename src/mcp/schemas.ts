@@ -221,7 +221,7 @@ export const structuralEdgeSchema = z.object({
   id: z.string(),
   from: z.string(),
   to: z.string(),
-  kind: z.enum(["call", "construct", "import", "extends", "implements"]),
+  kind: z.enum(["call", "invoke", "construct", "import", "extends", "implements"]),
   referenceId: z.string(),
 });
 
