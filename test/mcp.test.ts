@@ -72,6 +72,10 @@ describe("MCP server", () => {
         listed.tools.find((tool) => tool.name === "semantic_trellis_apply_patch")?.annotations,
       ).toMatchObject({ readOnlyHint: false, destructiveHint: true, idempotentHint: false });
       expect(client.getInstructions()).toContain("Never apply a patch without validation");
+      expect(client.getInstructions()).toContain("Unsupported artifact projection rule");
+      expect(client.getInstructions()).toContain("never ignore it, decode binary bytes as text");
+      expect(client.getInstructions()).toContain(".strellis.json or .strellis.md");
+      expect(client.getInstructions()).toContain("original repository-relative path, SHA-256");
 
       const status = await client.callTool({
         name: "semantic_trellis_status",

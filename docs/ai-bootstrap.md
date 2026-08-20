@@ -16,6 +16,34 @@ text file before the first semantic graph is accepted.
 The source policy excludes ignored, generated, dependency, binary, and
 configured directories. No source text is stored in bootstrap state.
 
+## Unsupported artifact projection fallback
+
+The disclosure manifest covers eligible text files only. It is not evidence
+that the repository contains no relevant binary or unsupported artifacts. If
+the Agent host independently discovers such an artifact, apply this rule:
+
+1. Never ignore the artifact, decode binary bytes as text, or invent a summary.
+2. Obtain explicit user approval both to read the artifact and to write a
+   derived repository file.
+3. Use a format-aware tool to produce a deterministic supported-text sidecar
+   ending in `.strellis.json` or `.strellis.md`. Never overwrite the original.
+4. Record the original repository-relative path, SHA-256 content hash, media
+   type, extraction tool and version, preserved document structure, and all
+   omissions or warnings.
+5. Restart bootstrap so the sidecar is included in a new frozen snapshot and
+   reviewed through the normal chunk, rollup, curation, and audit stages.
+
+For example, `design/BattleConfig.xlsx` can produce
+`design/BattleConfig.xlsx.strellis.json` containing workbook, sheet, table,
+field, row-identity, formula, validation, and cross-sheet reference data. A
+narrative binary document can instead produce a bounded Markdown projection.
+
+A projection is reproducible evidence, not canonical meaning. The original
+artifact remains authoritative, the curated graph remains canonical, and a
+projection is stale as soon as its recorded source hash differs. If no capable
+tool or approval is available, the Agent must report the artifact as unsupported
+and request direction instead of claiming complete coverage of it.
+
 ## Stage 1: chunk review
 
 Repeat:

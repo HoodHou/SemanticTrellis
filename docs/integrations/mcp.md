@@ -19,6 +19,13 @@ node dist/mcp/stdio.js /absolute/path/to/repository
 The process waits for an MCP host on standard input. Standard output is reserved
 for protocol messages; diagnostics are written to standard error.
 
+Server instructions include the unsupported-artifact projection rule. An Agent
+that independently discovers a relevant binary or unsupported file must obtain
+read and write approval, use a format-aware tool, preserve the original, bind a
+deterministic `.strellis.json` or `.strellis.md` sidecar to the original path and
+SHA-256 hash, and restart bootstrap. It must report a blocker when no capable
+tool is available. See [Agent-driven AI bootstrap](../ai-bootstrap.md).
+
 Structural tools support TypeScript, JavaScript, C#, Python, Python stubs, and
 Lua through the same fixed-repository index. Python and Lua dynamic calls are
 exposed as conservative `invoke` edges.

@@ -6,7 +6,7 @@
       "id": "agent-ai-bootstrap",
       "name": "Agent AI Bootstrap",
       "kind": "subsystem",
-      "summary": "Runs the consent-gated, frozen, resumable full-repository Agent review that checkpoints every source chunk and file summary before an audit-clean curated graph can be accepted, then reuses unchanged semantic checkpoints across later deltas.",
+      "summary": "Runs the consent-gated, frozen, resumable full-repository Agent review, provides a guarded format-aware projection fallback for independently discovered unsupported artifacts, checkpoints every source chunk and file summary before an audit-clean curated graph can be accepted, and reuses unchanged semantic checkpoints across later deltas.",
       "sources": [
         {
           "path": "src/domain/agent-bootstrap.ts",
@@ -34,7 +34,8 @@
         "ai",
         "bootstrap",
         "full-review",
-        "resumable"
+        "resumable",
+        "projection"
       ],
       "status": "approved",
       "locked": true
@@ -323,7 +324,7 @@
       "id": "mcp-agent-adapter",
       "name": "MCP Agent Adapter",
       "kind": "subsystem",
-      "summary": "Exposes 23 fixed-repository Agent tools and three resources for AI bootstrap, compact ask retrieval, exact structural reads, review state, audits, and graph writes guarded against changed graph, patch, or selected review entries.",
+      "summary": "Exposes 23 fixed-repository Agent tools and three resources for AI bootstrap, compact ask retrieval, exact structural reads, review state, audits, and graph writes guarded against changed graph, patch, or selected review entries, while initialization instructions enforce safe unsupported-artifact projection behavior.",
       "sources": [
         {
           "path": "src/mcp/server.ts",
@@ -353,7 +354,8 @@
         "integration",
         "retrieval",
         "ask",
-        "concurrency"
+        "concurrency",
+        "projection"
       ],
       "status": "approved",
       "locked": true

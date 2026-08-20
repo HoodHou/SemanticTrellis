@@ -50,8 +50,11 @@ import {
   validationOutputSchema,
 } from "./schemas.js";
 
-const INSTRUCTIONS =
-  "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use ask for one-call natural-language discovery with bounded source bodies, symbol_search for ranked metadata, and grep/trace for exact or exhaustive answers. For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.";
+const INSTRUCTIONS = [
+  "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use ask for one-call natural-language discovery with bounded source bodies, symbol_search for ranked metadata, and grep/trace for exact or exhaustive answers.",
+  "For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.",
+  "Unsupported artifact projection rule: the bootstrap manifest covers eligible text files only. If the host independently discovers a materially relevant artifact without a native adapter, never ignore it, decode binary bytes as text, or invent a summary. After explicit user approval for both reading the artifact and writing repository files, use an available format-aware tool to create a deterministic supported-text sidecar ending in .strellis.json or .strellis.md without modifying the original. Record the original repository-relative path, SHA-256 content hash, media type, extraction tool and version, preserved structure, and every omission or warning. Then restart bootstrap so the sidecar enters a new frozen snapshot. If approval or a capable tool is unavailable, report the artifact as unsupported and request direction.",
+].join(" ");
 
 function success<T extends Record<string, unknown>>(value: T) {
   return {
