@@ -63,9 +63,27 @@ coverage, and the completed curated-graph digest. Source text is never stored in
 this file; it is reread from the frozen hash when an approved Agent asks for a
 batch.
 
+### `.semantic-trellis/local/projection-index.json`
+
+Disposable projection-index schema version 1 caches Git-visible unsupported
+artifact hashes, size and modification-time hints, parsed projection metadata,
+repository revision, and sidecar hashes. It contains no unsupported artifact
+bytes or normalized projection body. A changed source invalidates only
+projections bound to that source hash.
+
+### Repository projection sidecars
+
+`.strellis.json` and `.strellis.md` files are reviewable, source-bound derived
+evidence. Projection schema version 1 records the original path and SHA-256,
+media type, producer tool and version, omissions, and warnings. Registration
+normalizes the sidecar deterministically and writes only the exact
+`<source-path>.strellis.json` or `<source-path>.strellis.md` target after token
+validation. Sidecars participate in normal eligible-text snapshots, but they do
+not share authority with the curated graph.
+
 Local files are ignored by Git and are never authoritative.
 
-Only the four runtime documents above should persist between normal sessions.
+Only the five local runtime documents above should persist between normal sessions.
 One-off probes, temporary MCP callers, and applied patch payloads belong in a
 temporary workspace and should be removed after handoff. Durable curation
 history is the versioned graph and Git history, not an accumulation of helper

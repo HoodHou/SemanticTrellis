@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDefaultConfig } from "../src/domain/config.js";
 import { scanRepositoryDetailed } from "../src/infrastructure/repository-scanner.js";
+import { readGitRevisionChanges } from "../src/infrastructure/repository-state.js";
 import { decodeSourceText } from "../src/infrastructure/text-decoder.js";
 
 const execFileAsync = promisify(execFile);
@@ -118,5 +119,45 @@ describe("repository scanner", () => {
 
     const scan = await scanRepositoryDetailed(root, createDefaultConfig("fixture").source);
     expect(scan.files.map((file) => file.path)).toEqual(["pkg/model.pyi"]);
+  });
+
+  it("identifies only paths changed between Git revisions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "semantic-trellis-revision-diff-"));
+    temporaryRoots.push(root);
+    await execFileAsync("git", ["init", "--quiet"], { cwd: root, windowsHide: true });
+    await execFileAsync("git", ["config", "user.email", "test@example.invalid"], {
+      cwd: root,
+      windowsHide: true,
+    });
+    await execFileAsync("git", ["config", "user.name", "SemanticTrellis Test"], {
+      cwd: root,
+      windowsHide: true,
+    });
+    await writeFile(join(root, "changed.bin"), "aaaa", "utf8");
+    await writeFile(join(root, "stable.bin"), "stable", "utf8");
+    await execFileAsync("git", ["add", "changed.bin", "stable.bin"], {
+      cwd: root,
+      windowsHide: true,
+    });
+    await execFileAsync("git", ["commit", "--quiet", "-m", "Initial"], {
+      cwd: root,
+      windowsHide: true,
+    });
+    const before = (await execFileAsync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      windowsHide: true,
+    })).stdout.trim();
+    await writeFile(join(root, "changed.bin"), "bbbb", "utf8");
+    await execFileAsync("git", ["add", "changed.bin"], { cwd: root, windowsHide: true });
+    await execFileAsync("git", ["commit", "--quiet", "-m", "Change one"], {
+      cwd: root,
+      windowsHide: true,
+    });
+    const after = (await execFileAsync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      windowsHide: true,
+    })).stdout.trim();
+
+    expect(await readGitRevisionChanges(root, before, after)).toEqual(["changed.bin"]);
   });
 });

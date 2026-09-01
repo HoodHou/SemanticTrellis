@@ -332,6 +332,89 @@ export const structuralAskOutputSchema = structuralSymbolSearchOutputSchema.exte
   sourceContexts: z.array(structuralSymbolSourceSchema),
 });
 
+export const projectionRefreshMetricsSchema = z.object({
+  artifactsDiscovered: z.number().int().nonnegative(),
+  unsupportedArtifacts: z.number().int().nonnegative(),
+  projectionFiles: z.number().int().nonnegative(),
+  hashedSources: z.number().int().nonnegative(),
+  reusedSourceHashes: z.number().int().nonnegative(),
+  parsedProjections: z.number().int().nonnegative(),
+  reusedProjections: z.number().int().nonnegative(),
+  durationMs: z.number().nonnegative(),
+});
+
+export const projectionFileStatusSchema = z.object({
+  path: z.string(),
+  format: z.enum(["json", "markdown"]),
+  health: z.enum(["current", "stale", "invalid", "missing-source", "source-supported"]),
+  sourcePath: z.string().nullable(),
+  sourceSha256: z.string().length(64).nullable(),
+  mediaType: z.string().nullable(),
+  tool: z.string().nullable(),
+  toolVersion: z.string().nullable(),
+  omissions: z.array(z.string()),
+  warnings: z.array(z.string()),
+  error: z.string().nullable(),
+});
+
+export const unsupportedArtifactStatusSchema = z.object({
+  path: z.string(),
+  sha256: z.string().length(64),
+  size: z.number().int().nonnegative(),
+  extension: z.string(),
+  reasons: z.array(z.enum(["unsupported-extension", "file-too-large"])),
+  state: z.enum(["unprojected", "current", "stale", "invalid"]),
+  projections: z.array(projectionFileStatusSchema),
+});
+
+export const unsupportedArtifactListSchema = z.object({
+  discoveryMode: z.enum(["git", "filesystem"]),
+  total: z.number().int().nonnegative(),
+  totalBytes: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+  returned: z.number().int().nonnegative(),
+  nextOffset: z.number().int().nonnegative().nullable(),
+  extensions: z.record(z.string(), z.number().int().nonnegative()),
+  items: z.array(unsupportedArtifactStatusSchema),
+  refresh: projectionRefreshMetricsSchema,
+});
+
+export const projectionStatusOutputSchema = unsupportedArtifactListSchema.extend({
+  counts: z.object({
+    unprojected: z.number().int().nonnegative(),
+    current: z.number().int().nonnegative(),
+    stale: z.number().int().nonnegative(),
+    invalid: z.number().int().nonnegative(),
+    orphaned: z.number().int().nonnegative(),
+  }),
+  orphaned: z.array(projectionFileStatusSchema),
+});
+
+export const projectionValidationOutputSchema = z.object({
+  validationToken: z.string().length(64),
+  projectionPath: z.string(),
+  format: z.enum(["json", "markdown"]),
+  sourcePath: z.string(),
+  sourceSha256: z.string().length(64),
+  mediaType: z.string(),
+  tool: z.string(),
+  toolVersion: z.string(),
+  omissions: z.array(z.string()),
+  warnings: z.array(z.string()),
+  projectionSha256: z.string().length(64),
+  existingProjectionSha256: z.string().length(64).nullable(),
+  bytes: z.number().int().nonnegative(),
+});
+
+export const projectionRegistrationOutputSchema = z.object({
+  projectionPath: z.string(),
+  sourcePath: z.string(),
+  sourceSha256: z.string().length(64),
+  projectionSha256: z.string().length(64),
+  bytes: z.number().int().nonnegative(),
+  health: z.literal("current"),
+});
+
 export const agentBootstrapStatusSchema = z.object({
   sessionId: z.string().length(64),
   snapshotDigest: z.string().length(64),
@@ -375,6 +458,19 @@ export const agentBootstrapPreviewOutputSchema = z.object({
   extensions: z.record(z.string(), z.number().int().nonnegative()),
   suspiciousPaths: z.array(z.string()),
   largestFiles: z.array(z.object({ path: z.string(), size: z.number().int().nonnegative() })),
+  unsupported: z.object({
+    totalFiles: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative(),
+    extensions: z.record(z.string(), z.number().int().nonnegative()),
+    current: z.number().int().nonnegative(),
+    stale: z.number().int().nonnegative(),
+    invalid: z.number().int().nonnegative(),
+    unprojected: z.number().int().nonnegative(),
+    orphaned: z.number().int().nonnegative(),
+    returned: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    artifacts: z.array(unsupportedArtifactStatusSchema),
+  }),
 });
 
 export const chunkSummarySubmissionSchema = z.object({

@@ -6,7 +6,7 @@
       "id": "agent-ai-bootstrap",
       "name": "Agent AI Bootstrap",
       "kind": "subsystem",
-      "summary": "Runs the consent-gated, frozen, resumable full-repository Agent review, provides a guarded format-aware projection fallback for independently discovered unsupported artifacts, checkpoints every source chunk and file summary before an audit-clean curated graph can be accepted, and reuses unchanged semantic checkpoints across later deltas.",
+      "summary": "Runs the consent-gated, frozen, resumable full-repository Agent review, automatically discloses unsupported artifact inventory and projection health without binary content, blocks stale or invalid sidecars, checkpoints every eligible source chunk and file summary before an audit-clean curated graph can be accepted, and reuses unchanged semantic checkpoints across later deltas.",
       "sources": [
         {
           "path": "src/domain/agent-bootstrap.ts",
@@ -109,6 +109,50 @@
       "tags": [
         "governance",
         "architecture"
+      ],
+      "status": "approved",
+      "locked": true
+    },
+    {
+      "id": "artifact-projection-pipeline",
+      "name": "Agent-Assisted Artifact Projection Pipeline",
+      "kind": "subsystem",
+      "summary": "Inventories every Git-visible artifact outside the eligible-text policy, validates deterministic source-bound JSON or Markdown projections, caches hashes and health locally, isolates stale sources incrementally, and registers sidecars through an exact source-content-target validation token without modifying originals.",
+      "sources": [
+        {
+          "path": "src/domain/projection.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/application/projection.ts",
+          "role": "primary"
+        },
+        {
+          "path": "src/infrastructure/projection-files.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "src/infrastructure/projection-store.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "docs/artifact-projections.md",
+          "role": "primary"
+        },
+        {
+          "path": "docs/adr/0015-agent-assisted-artifact-projections.md",
+          "role": "supporting"
+        }
+      ],
+      "tags": [
+        "agent",
+        "artifact",
+        "projection",
+        "binary",
+        "provenance",
+        "sha256",
+        "concurrency",
+        "incremental"
       ],
       "status": "approved",
       "locked": true
@@ -324,7 +368,7 @@
       "id": "mcp-agent-adapter",
       "name": "MCP Agent Adapter",
       "kind": "subsystem",
-      "summary": "Exposes 23 fixed-repository Agent tools and three resources for AI bootstrap, compact ask retrieval, exact structural reads, review state, audits, and graph writes guarded against changed graph, patch, or selected review entries, while initialization instructions enforce safe unsupported-artifact projection behavior.",
+      "summary": "Exposes 27 fixed-repository Agent tools and three resources for AI bootstrap, unsupported artifact inventory, guarded projection validation and registration, compact ask retrieval, exact structural reads, review state, audits, and graph writes protected against changed source, content, target, graph, patch, or selected review entries.",
       "sources": [
         {
           "path": "src/mcp/server.ts",
@@ -364,7 +408,7 @@
       "id": "repository-infrastructure",
       "name": "Repository Infrastructure",
       "kind": "subsystem",
-      "summary": "Owns Git-aware discovery, stat-assisted exact hashing, BOM and Python encoding-cookie decoding, language-environment exclusions, validated persistence, graph and source caches, project layout, and disposable local-state boundaries.",
+      "summary": "Owns complete Git-visible artifact discovery, parallel stat collection, stat- and revision-assisted exact and streaming hashing, BOM and Python encoding-cookie decoding, exclusions, atomic JSON and UTF-8 persistence, graph, source, structural and projection caches, project layout, and disposable local-state boundaries.",
       "sources": [
         {
           "path": "src/infrastructure/repository-scanner.ts",
@@ -397,6 +441,14 @@
         {
           "path": "src/infrastructure/layout.ts",
           "role": "supporting"
+        },
+        {
+          "path": "src/infrastructure/projection-files.ts",
+          "role": "supporting"
+        },
+        {
+          "path": "src/infrastructure/projection-store.ts",
+          "role": "supporting"
         }
       ],
       "tags": [
@@ -406,7 +458,9 @@
         "cache",
         "git",
         "encoding",
-        "python"
+        "python",
+        "projection",
+        "sha256"
       ],
       "status": "approved",
       "locked": true
@@ -438,7 +492,7 @@
       "id": "semantic-trellis-product",
       "name": "SemanticTrellis Product",
       "kind": "system",
-      "summary": "Turns one consented full-repository AI review into a durable curated semantic graph, then maintains repository understanding through bounded structural and semantic deltas instead of repeating the full review.",
+      "summary": "Turns one consented full-repository AI review into a durable curated semantic graph, makes unsupported artifacts visible and safely projectable without decoding binary bytes, then maintains repository understanding through bounded structural, projection, and semantic deltas instead of repeating the full review.",
       "sources": [
         {
           "path": "README.md",
@@ -452,7 +506,8 @@
       "tags": [
         "product",
         "semantic-graph",
-        "delta-maintenance"
+        "delta-maintenance",
+        "projection"
       ],
       "status": "approved",
       "locked": true
@@ -532,7 +587,7 @@
       "id": "verification-suite",
       "name": "Verification Suite",
       "kind": "component",
-      "summary": "Verifies lifecycle and graph integrity, TypeScript and C# extraction, Python and Lua declarations and packages, dynamic invokes, encoding cookies, stable identities, incremental maintenance, ranking and crux quality, concurrency, and the complete MCP workflow.",
+      "summary": "Verifies lifecycle and graph integrity, TypeScript and C# extraction, Python and Lua declarations and packages, complete unsupported discovery, JSON and Markdown projection contracts, stale-token rejection, one-source invalidation, dynamic invokes, encoding, stable identities, incremental maintenance, ranking, concurrency, and the complete MCP workflow.",
       "sources": [
         {
           "path": "test/agent-bootstrap.test.ts",
@@ -589,6 +644,10 @@
         {
           "path": "test/lua-adapter.test.ts",
           "role": "primary"
+        },
+        {
+          "path": "test/projection.test.ts",
+          "role": "primary"
         }
       ],
       "tags": [
@@ -599,6 +658,7 @@
         "csharp",
         "python",
         "lua",
+        "projection",
         "ai-bootstrap",
         "incremental",
         "encoding",
@@ -611,6 +671,14 @@
     }
   ],
   "edges": [
+    {
+      "id": "agent-bootstrap-depends-on-artifact-projections",
+      "from": "agent-ai-bootstrap",
+      "to": "artifact-projection-pipeline",
+      "relation": "depends-on",
+      "description": "Bootstrap previews projection state and rejects stale or invalid registered sidecars.",
+      "status": "approved"
+    },
     {
       "id": "agent-bootstrap-depends-on-infrastructure",
       "from": "agent-ai-bootstrap",
@@ -649,6 +717,14 @@
       "to": "repository-infrastructure",
       "relation": "depends-on",
       "description": "Application workflows load, scan, and persist repository state through infrastructure adapters.",
+      "status": "approved"
+    },
+    {
+      "id": "artifact-projections-depend-on-infrastructure",
+      "from": "artifact-projection-pipeline",
+      "to": "repository-infrastructure",
+      "relation": "depends-on",
+      "description": "Projection refresh and registration use Git inventory, streaming hashes, atomic persistence, and disposable indexes.",
       "status": "approved"
     },
     {
@@ -708,6 +784,14 @@
       "status": "approved"
     },
     {
+      "id": "mcp-depends-on-artifact-projections",
+      "from": "mcp-agent-adapter",
+      "to": "artifact-projection-pipeline",
+      "relation": "depends-on",
+      "description": "MCP exposes unsupported listing, projection status, validation, and guarded registration.",
+      "status": "approved"
+    },
+    {
       "id": "mcp-depends-on-domain",
       "from": "mcp-agent-adapter",
       "to": "curated-graph-domain",
@@ -753,6 +837,14 @@
       "to": "application-workflows",
       "relation": "contains",
       "description": "The product exposes its lifecycle through application workflows.",
+      "status": "approved"
+    },
+    {
+      "id": "product-contains-artifact-projections",
+      "from": "semantic-trellis-product",
+      "to": "artifact-projection-pipeline",
+      "relation": "contains",
+      "description": "The product includes a guarded path from unsupported repository artifacts to deterministic reviewable evidence.",
       "status": "approved"
     },
     {
@@ -857,6 +949,14 @@
       "to": "agent-ai-bootstrap",
       "relation": "validates",
       "description": "Tests verify disclosure consent, complete coverage, resume, reuse, source drift rejection, and graph completion.",
+      "status": "approved"
+    },
+    {
+      "id": "verification-validates-artifact-projections",
+      "from": "verification-suite",
+      "to": "artifact-projection-pipeline",
+      "relation": "validates",
+      "description": "Tests verify complete discovery, both formats, CAS rejection, stale isolation, and MCP registration.",
       "status": "approved"
     },
     {

@@ -19,12 +19,11 @@ node dist/mcp/stdio.js /absolute/path/to/repository
 The process waits for an MCP host on standard input. Standard output is reserved
 for protocol messages; diagnostics are written to standard error.
 
-Server instructions include the unsupported-artifact projection rule. An Agent
-that independently discovers a relevant binary or unsupported file must obtain
-read and write approval, use a format-aware tool, preserve the original, bind a
-deterministic `.strellis.json` or `.strellis.md` sidecar to the original path and
-SHA-256 hash, and restart bootstrap. It must report a blocker when no capable
-tool is available. See [Agent-driven AI bootstrap](../ai-bootstrap.md).
+Server instructions include the unsupported-artifact projection workflow. The
+server inventories unsupported paths automatically, validates deterministic
+`.strellis.json` and `.strellis.md` documents without writing, and registers
+only an unchanged source-bound proposal and token after host approval. See
+[Artifact projections](../artifact-projections.md).
 
 Structural tools support TypeScript, JavaScript, C#, Python, Python stubs, and
 Lua through the same fixed-repository index. Python and Lua dynamic calls are
@@ -43,6 +42,10 @@ exposed as conservative `invoke` edges.
 | `semantic_trellis_bootstrap_submit_file_summaries` | Checkpoint Agent file-level rollups |
 | `semantic_trellis_bootstrap_context` | Page complete file summaries for curation |
 | `semantic_trellis_bootstrap_complete` | Complete only after clean graph application |
+| `semantic_trellis_unsupported_list` | Page every Git-visible artifact outside the eligible-text policy |
+| `semantic_trellis_projection_status` | Read current, stale, invalid, unprojected, and orphaned projection state |
+| `semantic_trellis_projection_validate` | Validate and normalize a source-bound projection without writing |
+| `semantic_trellis_projection_register` | Register the exact validated projection without modifying its source |
 | `semantic_trellis_status` | Read project, graph, file, and review counts |
 | `semantic_trellis_graph` | Read the complete graph or a directional neighborhood |
 | `semantic_trellis_search` | Search curated nodes and source provenance |

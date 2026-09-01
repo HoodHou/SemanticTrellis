@@ -21,6 +21,10 @@ import { loadStructuralIndex } from "../infrastructure/structural-store.js";
 import { decodeSourceText } from "../infrastructure/text-decoder.js";
 import { buildStructuralIndex } from "./structure.js";
 import { bootstrapProject } from "./bootstrap.js";
+import {
+  getProjectionStatus,
+  type UnsupportedArtifactStatus,
+} from "./projection.js";
 import { syncProject } from "./sync.js";
 
 export interface AgentBootstrapStartOptions {
@@ -53,6 +57,19 @@ export interface AgentBootstrapPreview {
   extensions: Record<string, number>;
   suspiciousPaths: string[];
   largestFiles: Array<{ path: string; size: number }>;
+  unsupported: {
+    totalFiles: number;
+    totalBytes: number;
+    extensions: Record<string, number>;
+    current: number;
+    stale: number;
+    invalid: number;
+    unprojected: number;
+    orphaned: number;
+    returned: number;
+    truncated: boolean;
+    artifacts: UnsupportedArtifactStatus[];
+  };
 }
 
 export interface BootstrapSourceUnit {
@@ -197,7 +214,10 @@ async function requireSession(root: string): Promise<AgentBootstrapSession> {
 
 export async function previewAgentBootstrap(root: string): Promise<AgentBootstrapPreview> {
   const config = await loadConfig(root);
-  const scan = await scanRepositoryDetailed(root, config.source);
+  const [scan, projections] = await Promise.all([
+    scanRepositoryDetailed(root, config.source),
+    getProjectionStatus(root, 0, 500),
+  ]);
   const extensions: Record<string, number> = {};
   for (const file of scan.files) {
     const match = file.path.toLowerCase().match(/\.[^./]+$/);
@@ -215,7 +235,30 @@ export async function previewAgentBootstrap(root: string): Promise<AgentBootstra
       .sort((left, right) => right.size - left.size || left.path.localeCompare(right.path))
       .slice(0, 20)
       .map((file) => ({ path: file.path, size: file.size })),
+    unsupported: {
+      totalFiles: projections.total,
+      totalBytes: projections.totalBytes,
+      extensions: projections.extensions,
+      current: projections.counts.current,
+      stale: projections.counts.stale,
+      invalid: projections.counts.invalid,
+      unprojected: projections.counts.unprojected,
+      orphaned: projections.counts.orphaned,
+      returned: projections.returned,
+      truncated: projections.nextOffset !== null,
+      artifacts: projections.items,
+    },
   };
+}
+
+function assertProjectionReadiness(status: Awaited<ReturnType<typeof getProjectionStatus>>): void {
+  const blockers = status.counts.stale + status.counts.invalid + status.counts.orphaned;
+  if (blockers === 0) return;
+  throw new Error(
+    "Bootstrap is blocked by projection integrity: " +
+      `${status.counts.stale} stale, ${status.counts.invalid} invalid, ` +
+      `${status.counts.orphaned} orphaned. Regenerate, validate, and register affected projections first.`,
+  );
 }
 
 export async function startAgentBootstrap(
@@ -230,6 +273,7 @@ export async function startAgentBootstrap(
   }
   snapshot = await loadSnapshot(root);
   if (snapshot === null) throw new Error("Bootstrap could not create a repository snapshot.");
+  assertProjectionReadiness(await getProjectionStatus(root, 0, 1));
 
   const maxChunkCharacters = Math.max(2_000, Math.min(50_000, Math.floor(options.maxChunkCharacters ?? 12_000)));
   const structural = await buildStructuralIndex(root);
@@ -482,6 +526,7 @@ export async function finishAgentBootstrap(
 ): Promise<AgentBootstrapStatus> {
   const session = await requireSession(root);
   if (session.id !== sessionId) throw new Error("Bootstrap session ID is stale.");
+  assertProjectionReadiness(await getProjectionStatus(root, 0, 1));
   const graph = await loadGraph(root);
   const snapshot = await loadSnapshot(root);
   const actualGraphDigest = digestJson(graph);

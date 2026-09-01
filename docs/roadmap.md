@@ -29,6 +29,15 @@
 - [x] Add confidence, producer, model, risk, and source evidence to summaries.
 - Support offline and local-model adapters.
 
+## Milestone 2.5 - Documents and unsupported artifacts
+
+- [x] Inventory Git-visible artifacts outside the eligible-text policy.
+- [x] Define deterministic `.strellis.json` and `.strellis.md` projections.
+- [x] Guard projection writes with source/content/target validation tokens.
+- [x] Detect stale projections with changed-file-only hash refresh.
+- Add Markdown heading, table, front-matter, and link contributions.
+- Add native workbook extraction and code-to-configuration relationships.
+
 ## Milestone 3 - Curator workflow
 
 - Build an interactive review queue.

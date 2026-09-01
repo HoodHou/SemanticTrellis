@@ -3,6 +3,7 @@ export * from "./agent-bootstrap.js";
 export * from "./bootstrap.js";
 export * from "./curate.js";
 export * from "./initialize.js";
+export * from "./projection.js";
 export * from "./status.js";
 export * from "./structure.js";
 export * from "./structural-grep.js";

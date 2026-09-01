@@ -12,15 +12,19 @@ import {
   getFileSymbols,
   getNextBootstrapRollups,
   getNextBootstrapSourceBatch,
+  getProjectionStatus,
   grepStructure,
+  listUnsupportedArtifacts,
   previewAgentBootstrap,
   projectStatus,
+  registerArtifactProjection,
   searchProjectSymbols,
   startAgentBootstrap,
   submitBootstrapChunkSummaries,
   submitBootstrapFileSummaries,
   syncProject,
   traceProjectStructure,
+  validateArtifactProjection,
   validateCurationPatch,
 } from "../application/index.js";
 import { graphNeighborhood, searchGraph } from "../domain/query.js";
@@ -38,6 +42,9 @@ import {
   fileSemanticSummarySchema,
   graphOutputSchema,
   graphPatchSchema,
+  projectionRegistrationOutputSchema,
+  projectionStatusOutputSchema,
+  projectionValidationOutputSchema,
   reviewQueueOutputSchema,
   searchOutputSchema,
   statusOutputSchema,
@@ -47,13 +54,14 @@ import {
   structuralSymbolSearchOutputSchema,
   structuralTraceOutputSchema,
   syncOutputSchema,
+  unsupportedArtifactListSchema,
   validationOutputSchema,
 } from "./schemas.js";
 
 const INSTRUCTIONS = [
   "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use ask for one-call natural-language discovery with bounded source bodies, symbol_search for ranked metadata, and grep/trace for exact or exhaustive answers.",
   "For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.",
-  "Unsupported artifact projection rule: the bootstrap manifest covers eligible text files only. If the host independently discovers a materially relevant artifact without a native adapter, never ignore it, decode binary bytes as text, or invent a summary. After explicit user approval for both reading the artifact and writing repository files, use an available format-aware tool to create a deterministic supported-text sidecar ending in .strellis.json or .strellis.md without modifying the original. Record the original repository-relative path, SHA-256 content hash, media type, extraction tool and version, preserved structure, and every omission or warning. Then restart bootstrap so the sidecar enters a new frozen snapshot. If approval or a capable tool is unavailable, report the artifact as unsupported and request direction.",
+  "Unsupported artifact projection rule: call unsupported_list or inspect bootstrap_preview instead of assuming the eligible-text manifest covers every repository artifact. Never ignore a relevant unsupported artifact, decode binary bytes as text, or invent a summary. After explicit approval to read it, use an available format-aware tool to construct a deterministic .strellis.json or .strellis.md projection bound to the reported source path and SHA-256, with media type, tool and version, preserved structure, omissions, and warnings. Call projection_validate, present its exact target and effects for approval, then call projection_register with the unchanged document and token. Never write or overwrite a projection directly. Regenerate only stale projections, restart bootstrap after registration, and report a blocker when approval or a capable tool is unavailable.",
 ].join(" ");
 
 function success<T extends Record<string, unknown>>(value: T) {
@@ -111,7 +119,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Preview AI Bootstrap Disclosure",
       description:
-        "List the files, bytes, extension counts, largest files, and suspicious paths that would be disclosed for full AI review. Returns no source content and changes nothing.",
+        "List the eligible files, bytes, extensions, largest files, suspicious paths, and up to 500 automatically discovered unsupported artifacts with projection state. Returns no source or binary content and changes no repository files.",
       inputSchema: z.object({}),
       outputSchema: agentBootstrapPreviewOutputSchema,
       annotations: {
@@ -149,6 +157,107 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
           sourceDisclosureApproved,
           maxChunkCharacters,
         })),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_unsupported_list",
+    {
+      title: "List Unsupported Repository Artifacts",
+      description:
+        "Discover every Git-visible, non-excluded artifact outside the eligible text policy, hash it with stat-assisted reuse, and report projection state. Page with offset and limit for complete coverage.",
+      inputSchema: z.object({
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(500).default(100),
+        pathPrefix: z.string().min(1).optional(),
+      }),
+      outputSchema: unsupportedArtifactListSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ offset, limit, pathPrefix }) =>
+      safe(async () => ({
+        ...(await listUnsupportedArtifacts(root, offset, limit, pathPrefix)),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_projection_status",
+    {
+      title: "Read Artifact Projection Status",
+      description:
+        "Refresh and report current, stale, invalid, unprojected, and orphaned projections with changed-file-only hash metrics.",
+      inputSchema: z.object({
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(500).default(100),
+        pathPrefix: z.string().min(1).optional(),
+      }),
+      outputSchema: projectionStatusOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ offset, limit, pathPrefix }) =>
+      safe(async () => ({
+        ...(await getProjectionStatus(root, offset, limit, pathPrefix)),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_projection_validate",
+    {
+      title: "Validate Artifact Projection",
+      description:
+        "Validate and normalize a proposed .strellis.json or .strellis.md document without writing. Returns a token bound to the source hash, normalized projection, exact target, and current target contents.",
+      inputSchema: z.object({
+        projectionPath: z.string().min(1),
+        content: z.string().min(1).max(1_500_000),
+      }),
+      outputSchema: projectionValidationOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectionPath, content }) =>
+      safe(async () => ({
+        ...(await validateArtifactProjection(root, projectionPath, content)),
+      })),
+  );
+
+  server.registerTool(
+    "semantic_trellis_projection_register",
+    {
+      title: "Register Validated Artifact Projection",
+      description:
+        "Write the normalized projection sidecar at the source-bound path using the exact document and validation token. Rejects changed source, content, or target state and never modifies the original artifact.",
+      inputSchema: z.object({
+        projectionPath: z.string().min(1),
+        content: z.string().min(1).max(1_500_000),
+        validationToken: z.string().length(64),
+      }),
+      outputSchema: projectionRegistrationOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectionPath, content, validationToken }) =>
+      safe(async () => ({
+        ...(await registerArtifactProjection(
+          root,
+          projectionPath,
+          content,
+          validationToken,
+        )),
       })),
   );
 

@@ -49,3 +49,26 @@ export async function readGitRepositoryState(root: string): Promise<GitRepositor
     return null;
   }
 }
+
+export async function readGitRevisionChanges(
+  root: string,
+  beforeRevision: string,
+  afterRevision: string,
+): Promise<string[] | null> {
+  if (!/^[a-f0-9]{40,64}$/i.test(beforeRevision) || !/^[a-f0-9]{40,64}$/i.test(afterRevision)) {
+    return null;
+  }
+  try {
+    return [...new Set(paths(await git(root, [
+      "diff",
+      "--no-renames",
+      "--name-only",
+      "-z",
+      beforeRevision,
+      afterRevision,
+      "--",
+    ])))].sort();
+  } catch {
+    return null;
+  }
+}

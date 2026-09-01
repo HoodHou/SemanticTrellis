@@ -3,6 +3,7 @@ export * from "./domain/config.js";
 export * from "./domain/agent-bootstrap.js";
 export * from "./domain/graph.js";
 export * from "./domain/model.js";
+export * from "./domain/projection.js";
 export * from "./domain/query.js";
 export * from "./domain/review.js";
 export * from "./domain/snapshot.js";

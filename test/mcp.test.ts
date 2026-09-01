@@ -1,5 +1,5 @@
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -61,6 +61,10 @@ describe("MCP server", () => {
           "semantic_trellis_bootstrap_submit_file_summaries",
           "semantic_trellis_bootstrap_context",
           "semantic_trellis_bootstrap_complete",
+          "semantic_trellis_unsupported_list",
+          "semantic_trellis_projection_status",
+          "semantic_trellis_projection_validate",
+          "semantic_trellis_projection_register",
           "semantic_trellis_validate_patch",
           "semantic_trellis_apply_patch",
         ]),
@@ -73,9 +77,10 @@ describe("MCP server", () => {
       ).toMatchObject({ readOnlyHint: false, destructiveHint: true, idempotentHint: false });
       expect(client.getInstructions()).toContain("Never apply a patch without validation");
       expect(client.getInstructions()).toContain("Unsupported artifact projection rule");
-      expect(client.getInstructions()).toContain("never ignore it, decode binary bytes as text");
+      expect(client.getInstructions()).toContain("Never ignore a relevant unsupported artifact");
       expect(client.getInstructions()).toContain(".strellis.json or .strellis.md");
-      expect(client.getInstructions()).toContain("original repository-relative path, SHA-256");
+      expect(client.getInstructions()).toContain("projection_validate");
+      expect(client.getInstructions()).toContain("projection_register");
 
       const status = await client.callTool({
         name: "semantic_trellis_status",
@@ -382,6 +387,78 @@ describe("MCP server", () => {
       expect("text" in graphResource.contents[0] ? graphResource.contents[0].text : "").toContain(
         "fixture-entry",
       );
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("discovers, validates, and registers a source-bound projection over MCP", async () => {
+    const root = await fixture();
+    await mkdir(join(root, "design"));
+    const original = Buffer.from("PK-workbook-fixture");
+    await writeFile(join(root, "design", "config.xlsx"), original);
+    const server = createSemanticTrellisMcpServer(root);
+    const client = new Client({ name: "semantic-trellis-projection-test", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    try {
+      const unsupported = await client.callTool({
+        name: "semantic_trellis_unsupported_list",
+        arguments: { offset: 0, limit: 100 },
+      });
+      expect(unsupported.isError).not.toBe(true);
+      const artifact = (
+        unsupported.structuredContent?.items as Array<{ path: string; sha256: string }>
+      ).find((item) => item.path === "design/config.xlsx");
+      expect(artifact).toBeDefined();
+      const projectionPath = "design/config.xlsx.strellis.json";
+      const content = JSON.stringify({
+        schemaVersion: 1,
+        kind: "semantic-trellis-projection",
+        source: {
+          path: artifact?.path,
+          sha256: artifact?.sha256,
+          mediaType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+        producer: { tool: "mcp-test-workbook-reader", version: "1.0.0" },
+        omissions: [],
+        warnings: [],
+        content: { sheets: [{ name: "Config", rows: [{ id: 1 }] }] },
+      });
+      const validation = await client.callTool({
+        name: "semantic_trellis_projection_validate",
+        arguments: { projectionPath, content },
+      });
+      expect(validation.isError).not.toBe(true);
+      expect(validation.structuredContent).toMatchObject({
+        projectionPath,
+        sourcePath: "design/config.xlsx",
+        existingProjectionSha256: null,
+      });
+
+      const registered = await client.callTool({
+        name: "semantic_trellis_projection_register",
+        arguments: {
+          projectionPath,
+          content,
+          validationToken: validation.structuredContent?.validationToken,
+        },
+      });
+      expect(registered.isError).not.toBe(true);
+      expect(registered.structuredContent).toMatchObject({ health: "current" });
+      expect(await readFile(join(root, "design", "config.xlsx"))).toEqual(original);
+
+      const status = await client.callTool({
+        name: "semantic_trellis_projection_status",
+        arguments: { pathPrefix: "design", offset: 0, limit: 100 },
+      });
+      expect(status.structuredContent).toMatchObject({
+        total: 1,
+        counts: { current: 1, stale: 0, invalid: 0 },
+      });
     } finally {
       await client.close();
       await server.close();

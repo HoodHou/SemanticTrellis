@@ -12,6 +12,7 @@ export interface ProjectLayout {
   reviewQueueFile: string;
   structuralIndexFile: string;
   agentBootstrapFile: string;
+  projectionIndexFile: string;
 }
 
 export function projectLayout(root: string): ProjectLayout {
@@ -28,5 +29,6 @@ export function projectLayout(root: string): ProjectLayout {
     reviewQueueFile: join(localDirectory, "review-queue.json"),
     structuralIndexFile: join(localDirectory, "structural-index.json"),
     agentBootstrapFile: join(localDirectory, "agent-bootstrap.json"),
+    projectionIndexFile: join(localDirectory, "projection-index.json"),
   };
 }

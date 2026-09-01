@@ -38,6 +38,11 @@ Before changing architecture or storage behavior, read:
   tool may bypass it.
 - MCP bootstrap must preview the disclosure manifest and obtain explicit user
   approval before returning repository source chunks.
+- Unsupported artifact projections must bind the exact repository-relative
+  source path and SHA-256, preserve the original, and use the
+  validate-token-register workflow; no direct projection write may bypass it.
+- Bootstrap cannot start or complete while a registered projection is stale,
+  invalid, orphaned, or bound to a source that now has native support.
 - A bootstrap cannot be marked complete until chunk and file coverage are 100%
   and the curated graph audit is clean.
 - Every node must be able to cite repository-relative source paths.

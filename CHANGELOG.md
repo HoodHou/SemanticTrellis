@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.0 - 2026-09-01
+
+### Added
+
+- Complete Git-visible unsupported-artifact inventory in bootstrap preview and
+  a pageable MCP listing.
+- Strict schema-versioned `.strellis.json` and `.strellis.md` projection
+  formats with original path, SHA-256, media type, producer, omissions, and
+  warnings.
+- Projection validation tokens bound to the source hash, normalized content,
+  exact target, and existing target contents.
+- MCP tools for unsupported listing, projection status, read-only validation,
+  and guarded registration.
+- A disposable projection index with stat-assisted hash reuse and per-source
+  stale detection.
+
+### Changed
+
+- Bootstrap start and completion now reject stale, invalid, orphaned, or
+  now-native projection sidecars.
+
 ## 0.8.1 - 2026-08-19
 
 ### Added

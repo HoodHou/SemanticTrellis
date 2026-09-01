@@ -46,6 +46,12 @@ Agent-driven AI bootstrap, TypeScript, JavaScript, C#, Python, and Lua structura
 extraction, and MCP are available. Direct model-provider adapters, additional
 languages, and a visual curator remain later milestones.
 
+Bootstrap preview also inventories every Git-visible artifact outside the
+eligible-text policy. A format-aware Agent host can validate and register a
+deterministic `.strellis.json` or `.strellis.md` projection without modifying
+the original. Source, projection, and target hashes are concurrency-bound, and
+only projections for changed sources become stale.
+
 ## Quick start
 
 Requirements: Node.js 22 or newer and npm.
@@ -163,6 +169,7 @@ When SemanticTrellis initializes a target repository, it creates:
     review-queue.json Pending local review work
     structural-index.json Disposable per-file symbols and references
     agent-bootstrap.json Resumable AI-review checkpoints and coverage
+    projection-index.json Disposable unsupported hashes and projection status
 ```
 
 Only `.semantic-trellis/local/` is ignored. The config and curated graph are
@@ -175,6 +182,7 @@ intended to be reviewed and committed.
 - [Roadmap](docs/roadmap.md)
 - [MCP integration](docs/integrations/mcp.md)
 - [AI bootstrap](docs/ai-bootstrap.md)
+- [Artifact projections](docs/artifact-projections.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Language policy

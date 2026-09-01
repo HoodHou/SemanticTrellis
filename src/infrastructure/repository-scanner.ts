@@ -23,12 +23,19 @@ function excludedDirectories(policy: SourcePolicy): Set<string> {
   return new Set(policy.excludeDirectories.map((name) => name.toLowerCase()));
 }
 
-function pathAllowed(relativePath: string, policy: SourcePolicy): boolean {
+function directoryAllowed(relativePath: string, policy: SourcePolicy): boolean {
   const segments = toPosixPath(relativePath).split("/");
   const excluded = excludedDirectories(policy);
-  if (segments.some((segment) => excluded.has(segment.toLowerCase()))) return false;
+  return !segments.some((segment) => excluded.has(segment.toLowerCase()));
+}
+
+function extensionAllowed(relativePath: string, policy: SourcePolicy): boolean {
   const extensions = new Set(policy.extensions.map((extension) => extension.toLowerCase()));
   return extensions.has(extname(relativePath).toLowerCase());
+}
+
+function sourceAllowed(candidate: Candidate, policy: SourcePolicy): boolean {
+  return extensionAllowed(candidate.relativePath, policy) && candidate.size <= policy.maxFileBytes;
 }
 
 async function gitVisiblePaths(root: string): Promise<string[] | null> {
@@ -54,29 +61,29 @@ async function collectGitCandidates(
   paths: string[],
   policy: SourcePolicy,
 ): Promise<Candidate[]> {
-  const candidates: Candidate[] = [];
   const rootPrefix = root.endsWith(sep) ? root : `${root}${sep}`;
-  for (const gitPath of paths) {
+  const candidates = await mapWithConcurrency(paths, 32, async (gitPath): Promise<Candidate | null> => {
     const relativePath = toPosixPath(gitPath);
-    if (!pathAllowed(relativePath, policy)) continue;
+    if (!directoryAllowed(relativePath, policy)) return null;
     const absolutePath = resolve(root, gitPath);
-    if (absolutePath !== root && !absolutePath.startsWith(rootPrefix)) continue;
+    if (absolutePath !== root && !absolutePath.startsWith(rootPrefix)) return null;
     try {
       const fileStat = await lstat(absolutePath);
-      if (!fileStat.isFile() || fileStat.isSymbolicLink() || fileStat.size > policy.maxFileBytes) {
-        continue;
+      if (!fileStat.isFile() || fileStat.isSymbolicLink()) {
+        return null;
       }
-      candidates.push({
+      return {
         absolutePath,
         relativePath,
         size: fileStat.size,
         mtimeMs: fileStat.mtimeMs,
-      });
+      };
     } catch {
       // A tracked file deleted in the worktree is still returned by --cached.
+      return null;
     }
-  }
-  return candidates;
+  });
+  return candidates.filter((candidate): candidate is Candidate => candidate !== null);
 }
 
 async function collectCandidates(
@@ -97,10 +104,9 @@ async function collectCandidates(
     }
     if (!entry.isFile()) continue;
     const relativePath = toPosixPath(relative(root, absolutePath));
-    if (!pathAllowed(relativePath, policy)) continue;
+    if (!directoryAllowed(relativePath, policy)) continue;
 
     const fileStat = await stat(absolutePath);
-    if (fileStat.size > policy.maxFileBytes) continue;
     candidates.push({
       absolutePath,
       relativePath,
@@ -138,6 +144,20 @@ export interface RepositoryScan {
   sources: Record<string, string>;
 }
 
+export interface RepositoryInventoryArtifact {
+  path: string;
+  size: number;
+  mtimeMs: number;
+  extension: string;
+  eligible: boolean;
+  reasons: Array<"unsupported-extension" | "file-too-large">;
+}
+
+export interface RepositoryInventory {
+  discoveryMode: "git" | "filesystem";
+  artifacts: RepositoryInventoryArtifact[];
+}
+
 export interface RepositoryScanOptions {
   previousFiles?: readonly FileRecord[] | undefined;
   captureSource?: ((path: string) => boolean) | undefined;
@@ -150,11 +170,10 @@ function mustHash(path: string, option: RepositoryScanOptions["forceHash"]): boo
   return option.has(path);
 }
 
-export async function scanRepositoryDetailed(
+async function discoverCandidates(
   root: string,
   policy: SourcePolicy,
-  options: RepositoryScanOptions = {},
-): Promise<RepositoryScan> {
+): Promise<{ discoveryMode: "git" | "filesystem"; candidates: Candidate[] }> {
   const absoluteRoot = resolve(root);
   const rootStat = await stat(absoluteRoot);
   if (!rootStat.isDirectory()) throw new Error(`Repository root is not a directory: ${absoluteRoot}`);
@@ -167,6 +186,44 @@ export async function scanRepositoryDetailed(
     await collectCandidates(absoluteRoot, absoluteRoot, policy, candidates);
   }
   candidates.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+  return {
+    discoveryMode: gitPaths === null ? "filesystem" : "git",
+    candidates,
+  };
+}
+
+export async function scanRepositoryInventory(
+  root: string,
+  policy: SourcePolicy,
+): Promise<RepositoryInventory> {
+  const discovered = await discoverCandidates(root, policy);
+  return {
+    discoveryMode: discovered.discoveryMode,
+    artifacts: discovered.candidates.map((candidate) => {
+      const reasons: RepositoryInventoryArtifact["reasons"] = [];
+      if (!extensionAllowed(candidate.relativePath, policy)) reasons.push("unsupported-extension");
+      if (candidate.size > policy.maxFileBytes) reasons.push("file-too-large");
+      const extension = extname(candidate.relativePath).toLowerCase();
+      return {
+        path: candidate.relativePath,
+        size: candidate.size,
+        mtimeMs: candidate.mtimeMs,
+        extension: extension || "(none)",
+        eligible: reasons.length === 0,
+        reasons,
+      };
+    }),
+  };
+}
+
+export async function scanRepositoryDetailed(
+  root: string,
+  policy: SourcePolicy,
+  options: RepositoryScanOptions = {},
+): Promise<RepositoryScan> {
+  const absoluteRoot = resolve(root);
+  const discovered = await discoverCandidates(absoluteRoot, policy);
+  const candidates = discovered.candidates.filter((candidate) => sourceAllowed(candidate, policy));
 
   const previousByPath = new Map(
     (options.previousFiles ?? []).map((file) => [file.path, file]),
@@ -200,7 +257,7 @@ export async function scanRepositoryDetailed(
     };
   });
   return {
-    discoveryMode: gitPaths === null ? "filesystem" : "git",
+    discoveryMode: discovered.discoveryMode,
     files,
     sources,
   };

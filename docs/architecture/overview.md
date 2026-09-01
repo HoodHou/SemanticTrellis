@@ -39,6 +39,20 @@ as conservative `invoke` references. Lua uses a prebuilt Tree-sitter Lua grammar
 and models module tables, callbacks, `require` imports, and dynamic invocation in
 the same contribution format. Other languages plug into the same registry.
 
+### Artifact projections
+
+Repository inventory also classifies every Git-visible regular file outside the
+eligible-text policy. Unsupported bytes are never decoded or disclosed by the
+projection inventory. A format-aware Agent host can instead propose a strict,
+deterministic `.strellis.json` or `.strellis.md` sidecar whose metadata binds the
+original repository-relative path and SHA-256.
+
+Projection validation is read-only. Registration requires the unchanged
+document and a token bound to the source hash, normalized projection digest,
+exact target path, and existing target digest. The original artifact is never
+modified. A disposable projection index reuses stat-stable hashes and marks only
+the projection for a changed source stale.
+
 ### Change set and impact
 
 The maintenance engine compares the current repository inventory with the last
@@ -80,15 +94,19 @@ more stable than the symbol graph.
 ### Bootstrap
 
 1. Preview the complete Git-visible disclosure set without returning source.
-2. Obtain explicit user approval for Agent source review.
-3. Freeze and hash the complete repository snapshot.
-4. Split every eligible text file into stable source chunks.
-5. Let the connected Agent summarize every chunk with resumable checkpoints.
-6. Roll chunk summaries and structural evidence into one semantic summary per
+2. List unsupported artifacts and their current projection state without
+   disclosing binary content.
+3. Optionally validate and register approved format-aware projections.
+4. Obtain explicit user approval for Agent source review.
+5. Freeze and hash the complete eligible-text repository snapshot.
+6. Split every eligible text file and registered projection into stable source chunks.
+7. Let the connected Agent summarize every chunk with resumable checkpoints.
+8. Roll chunk summaries and structural evidence into one semantic summary per
    file.
-7. Page the complete summary corpus to the Curator Agent.
-8. Review and apply its sourced graph proposal as an explicit patch.
-9. Mark the session complete only at 100% coverage and a clean graph audit.
+9. Page the complete summary corpus to the Curator Agent.
+10. Review and apply its sourced graph proposal as an explicit patch.
+11. Mark the session complete only at 100% coverage, clean projection status,
+    and a clean graph audit.
 
 ### Sync
 

@@ -6,8 +6,8 @@ text file before the first semantic graph is accepted.
 ## Consent and scope
 
 1. Call `semantic_trellis_bootstrap_preview`.
-2. Show the file count, total bytes, largest files, extensions, and suspicious
-   paths to the user.
+2. Show the eligible-text disclosure manifest and unsupported-artifact summary
+   to the user.
 3. Obtain explicit approval to disclose this source to the connected Agent
    model.
 4. Call `semantic_trellis_bootstrap_start` with
@@ -18,31 +18,22 @@ configured directories. No source text is stored in bootstrap state.
 
 ## Unsupported artifact projection fallback
 
-The disclosure manifest covers eligible text files only. It is not evidence
-that the repository contains no relevant binary or unsupported artifacts. If
-the Agent host independently discovers such an artifact, apply this rule:
+The preview now inventories unsupported Git-visible files automatically. Page
+the complete set with `semantic_trellis_unsupported_list`. Never ignore a
+relevant artifact, decode binary bytes as text, or invent a summary.
 
-1. Never ignore the artifact, decode binary bytes as text, or invent a summary.
-2. Obtain explicit user approval both to read the artifact and to write a
-   derived repository file.
-3. Use a format-aware tool to produce a deterministic supported-text sidecar
-   ending in `.strellis.json` or `.strellis.md`. Never overwrite the original.
-4. Record the original repository-relative path, SHA-256 content hash, media
-   type, extraction tool and version, preserved document structure, and all
-   omissions or warnings.
-5. Restart bootstrap so the sidecar is included in a new frozen snapshot and
-   reviewed through the normal chunk, rollup, curation, and audit stages.
+After explicit read approval, use a format-aware host tool to construct a
+source-bound `.strellis.json` or `.strellis.md` document. Call
+`semantic_trellis_projection_validate`, present its exact source, target,
+digests, byte size, omissions, warnings, and overwrite state, then obtain write
+approval before calling `semantic_trellis_projection_register` with the
+unchanged document and token. Never write a sidecar directly or overwrite the
+original artifact.
 
-For example, `design/BattleConfig.xlsx` can produce
-`design/BattleConfig.xlsx.strellis.json` containing workbook, sheet, table,
-field, row-identity, formula, validation, and cross-sheet reference data. A
-narrative binary document can instead produce a bounded Markdown projection.
-
-A projection is reproducible evidence, not canonical meaning. The original
-artifact remains authoritative, the curated graph remains canonical, and a
-projection is stale as soon as its recorded source hash differs. If no capable
-tool or approval is available, the Agent must report the artifact as unsupported
-and request direction instead of claiming complete coverage of it.
+Restart bootstrap after registration. Bootstrap start and completion reject
+stale, invalid, and orphaned projections. Unprojected artifacts remain visible
+for relevance review. See [Artifact projections](artifact-projections.md) for
+the complete schema and workflow.
 
 ## Stage 1: chunk review
 

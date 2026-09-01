@@ -16,12 +16,16 @@ export async function readJsonFileOrNull(path: string): Promise<unknown | null> 
 }
 
 export async function writeJsonFile(path: string, value: unknown): Promise<void> {
+  await writeTextFile(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+export async function writeTextFile(path: string, value: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const temporary = join(
     dirname(path),
     `.${basename(path)}.${process.pid}.${Date.now()}.tmp`,
   );
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  await writeFile(temporary, value, "utf8");
   try {
     await rename(temporary, path);
   } catch (error) {

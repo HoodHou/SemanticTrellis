@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 
 function canonicalValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalValue);
@@ -21,4 +22,10 @@ export function digestJson(value: unknown): string {
 
 export function digestBytes(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export async function digestFile(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex");
 }
