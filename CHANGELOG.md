@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.2 - 2026-10-16
+
+### Changed
+
+- Warm structural reads compare indexed file and directory timestamps and skip
+  Git status when that stamp is unchanged.
+- Ask's one-hop slots prefer domain implementations over infrastructure loaders.
+
 ## 0.10.1 - 2026-10-16
 
 ### Changed

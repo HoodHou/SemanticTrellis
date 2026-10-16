@@ -88,17 +88,28 @@ export function validateCurationPatch(): string {
       `export function applyGraphPatch(): string {
   return "referential integrity gate";
 }
+export function auditGraph(): string {
+  return "audit";
+}
 `,
     );
     await writeRepoFile(
       root,
+      "src/infrastructure/project-store.ts",
+      "export function loadGraph(): string { return \"stored\"; }\n",
+    );
+    await writeRepoFile(
+      root,
       "src/application/curate.ts",
-      `import { applyGraphPatch } from "../domain/graph.js";
+      `import { applyGraphPatch, auditGraph } from "../domain/graph.js";
+import { loadGraph } from "../infrastructure/project-store.js";
 function reviewedPaths(): string { return "paths"; }
 function validationToken(): string { return "token"; }
 export function validateCurationPatch(): string {
   reviewedPaths();
   validationToken();
+  loadGraph();
+  auditGraph();
   return applyGraphPatch();
 }
 `,
@@ -111,7 +122,10 @@ export function validateCurationPatch(): string {
       repairStale: false,
     });
     expect(asked.hits[0]?.symbol.name).toBe("validateCurationPatch");
-    expect(asked.calleeCruxes.map((crux) => crux.symbolId).join(" ")).toContain("applyGraphPatch");
+    const calleeIds = asked.calleeCruxes.map((crux) => crux.symbolId).join(" ");
+    expect(calleeIds).toContain("applyGraphPatch");
+    expect(calleeIds).toContain("auditGraph");
+    expect(asked.calleeCruxes.some((crux) => crux.symbolId.includes("loadGraph"))).toBe(false);
     expect(asked.calleeCruxes.some((crux) => crux.symbolId.includes("reviewedPaths"))).toBe(false);
     expect(asked.calleeCruxes.some((crux) => crux.symbolId.includes("validationToken"))).toBe(false);
   });

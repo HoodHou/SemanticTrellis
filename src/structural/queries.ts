@@ -242,6 +242,13 @@ function isSyntheticTestCallback(symbol: StructuralSymbol): boolean {
     /^(?:it|test|describe|beforeEach|afterEach|beforeAll|afterAll)\b/.test(symbol.name);
 }
 
+function calleeRoleBias(path: string): number {
+  const normalized = path.replace(/\\/g, "/");
+  if (/(?:^|\/)domain(?:\/|$)/.test(normalized)) return 40;
+  if (/(?:^|\/)infrastructure(?:\/|$)/.test(normalized)) return -20;
+  return 0;
+}
+
 export function selectCalleeCruxSymbols(
   index: StructuralIndex,
   hits: readonly StructuralSymbolSearchHit[],
@@ -276,7 +283,7 @@ export function selectCalleeCruxSymbols(
       ranked.push({
         symbol,
         crossFile: symbol.path !== hit.symbol.path,
-        score: overlap * 10 + importance + (hits.length - hitIndex),
+        score: overlap * 10 + importance + calleeRoleBias(symbol.path) + (hits.length - hitIndex),
       });
     }
   });

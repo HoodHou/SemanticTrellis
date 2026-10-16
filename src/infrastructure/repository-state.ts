@@ -17,7 +17,7 @@ function paths(value: string): string[] {
 }
 
 async function git(root: string, args: string[]): Promise<string> {
-  return (await execFileAsync("git", args, {
+  return (await execFileAsync("git", ["--no-optional-locks", ...args], {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,

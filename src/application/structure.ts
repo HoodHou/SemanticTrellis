@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { readFile, stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
   STRUCTURAL_SCHEMA_VERSION,
   type FileContribution,
@@ -147,8 +147,71 @@ function cachedStructuralResult(index: StructuralIndex, started: number): Struct
   };
 }
 
+interface FreshDirectoryStamp {
+  revision: string;
+  directories: string;
+}
+
+const freshDirectoryStamps = new Map<string, FreshDirectoryStamp>();
+
+async function directoryStamp(root: string, index: StructuralIndex): Promise<string> {
+  const directories = [...new Set([
+    root,
+    ...Object.keys(index.contributions).map((path) => resolve(root, dirname(path))),
+  ])].sort();
+  const stamps = await Promise.all(directories.map(async (directory) => {
+    try {
+      const fileStat = await stat(directory);
+      return `${directory}:${fileStat.mtimeMs}`;
+    } catch {
+      return `${directory}:missing`;
+    }
+  }));
+  return stamps.join("\n");
+}
+
+async function indexedFilesDiffer(root: string, index: StructuralIndex): Promise<boolean> {
+  const contributions = Object.values(index.contributions);
+  let next = 0;
+  let differs = false;
+  await Promise.all(Array.from({ length: Math.min(32, contributions.length) }, async () => {
+    while (!differs && next < contributions.length) {
+      const current = contributions[next];
+      next += 1;
+      if (current === undefined) continue;
+      try {
+        const fileStat = await stat(resolve(root, current.path));
+        if (fileStat.size !== current.sourceSize || fileStat.mtimeMs !== current.sourceMtimeMs) {
+          differs = true;
+        }
+      } catch {
+        differs = true;
+      }
+    }
+  }));
+  return differs;
+}
+
 async function hasStaleContribution(root: string, index: StructuralIndex): Promise<boolean> {
-  if (index.extractorFingerprint !== EXTRACTOR_FINGERPRINT) return true;
+  if (index.extractorFingerprint !== EXTRACTOR_FINGERPRINT) {
+    freshDirectoryStamps.delete(root);
+    return true;
+  }
+  if (index.discoveryMode === "git") {
+    if (await indexedFilesDiffer(root, index)) {
+      freshDirectoryStamps.delete(root);
+      return true;
+    }
+    const directories = await directoryStamp(root, index);
+    const fresh = freshDirectoryStamps.get(root);
+    if (
+      fresh !== undefined &&
+      fresh.revision === index.repositoryRevision &&
+      fresh.directories === directories
+    ) {
+      return false;
+    }
+  }
   const gitState = await readGitRepositoryState(root);
   if (index.discoveryMode === "git" && gitState !== null) {
     if (gitState.revision !== index.repositoryRevision) {
@@ -166,6 +229,10 @@ async function hasStaleContribution(root: string, index: StructuralIndex): Promi
       directoryAllowed(path, excluded) && pathMayHaveStructure(path),
     );
     if (relevantTracked.length === 0 && structuralUntracked.length === 0) {
+      freshDirectoryStamps.set(root, {
+        revision: index.repositoryRevision ?? "",
+        directories: await directoryStamp(root, index),
+      });
       return false;
     }
     const { createDefaultLanguageRegistry } = await import("../structural/registry.js");
@@ -209,6 +276,10 @@ async function hasStaleContribution(root: string, index: StructuralIndex): Promi
         return true;
       }
     }
+    freshDirectoryStamps.set(root, {
+      revision: index.repositoryRevision ?? "",
+      directories: await directoryStamp(root, index),
+    });
     return false;
   }
 

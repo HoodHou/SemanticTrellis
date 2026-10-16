@@ -55,7 +55,8 @@ Python and Lua dynamic calls use the `invoke` relation.
 The index also stores repository revision/untracked state, per-file resolution
 metrics, and target-name reverse references for incremental edge repair. An
 unchanged file reuses its contribution without parsing. A clean Git tree whose
-revision matches the index skips the repository scan. The current structural
+revision matches the index skips the repository scan. Repeated reads compare indexed file and directory timestamps and skip Git
+status when that stamp is unchanged. The current structural
 cache schema is version 8; older local indexes are discarded and rebuilt.
 Version 8 adds heading, table, and sheet symbols plus `references` edges for
 Markdown links and code-to-document or code-to-projection mentions. Each index
