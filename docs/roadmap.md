@@ -62,8 +62,9 @@
 - [x] Expose graph queries, review state, audit, sync, and guarded curation over
   local stdio MCP.
 - [x] Expose structural build, grep, file-symbol, and trace tools over MCP.
-- Add Codex, Claude Code, Cursor, and editor integrations.
-- Provide repository map, semantic search, trace, and impact tools.
+- [x] Document Codex, Claude Code, and Cursor MCP configuration bound to one
+  repository root.
+- [x] Provide repository map, semantic search, trace, and impact tools.
 - Add token and latency measurements.
 
 ## Milestone 6 - Visualization and scale

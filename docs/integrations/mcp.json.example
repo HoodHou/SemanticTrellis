@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "semantic_trellis": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/SemanticTrellis/dist/mcp/stdio.js",
+        "/absolute/path/to/the/target-repository"
+      ]
+    }
+  }
+}

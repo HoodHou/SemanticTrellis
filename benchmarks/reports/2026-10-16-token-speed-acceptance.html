@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SemanticTrellis Token 与速度验收</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c1917;
+      --muted: #57534e;
+      --line: #e7e5e4;
+      --paper: #fafaf9;
+      --card: #ffffff;
+      --pass: #166534;
+      --pass-bg: #f0fdf4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 40px 24px 64px; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+    }
+    h1 { font-size: 28px; line-height: 1.2; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 32px 0 12px; }
+    p { margin: 0; }
+    .meta { color: var(--muted); font-size: 14px; }
+    .verdict {
+      background: var(--pass-bg);
+      color: var(--pass);
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat, table {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .stat { padding: 12px 14px; }
+    .stat b { display: block; font-size: 22px; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th { background: #f5f5f4; font-weight: 650; }
+    tr:last-child td { border-bottom: 0; }
+    .pass { color: var(--pass); font-weight: 650; }
+    code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+    .note { margin-top: 12px; color: var(--muted); font-size: 14px; }
+    @media (max-width: 720px) {
+      .stats { grid-template-columns: 1fr 1fr; }
+      header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Token 节省与速度验收</h1>
+        <p class="meta">SemanticTrellis 0.10.4 · 对比基线 0.10.3（312c60f）· 2026-10-16 · 本仓库实测</p>
+      </div>
+      <div class="verdict">通过</div>
+    </header>
+
+    <section class="stats">
+      <div class="stat"><b>66%</b><span>会话提示词字符下降</span></div>
+      <div class="stat"><b>79%</b><span>策展摘要字符下降</span></div>
+      <div class="stat"><b>51%</b><span>Bootstrap 提交次数下降</span></div>
+      <div class="stat"><b>9.5 ms</b><span>第二次 ask</span></div>
+    </section>
+
+    <h2>Token</h2>
+    <p>字符按英文约 4 个字符折 1 个 token 估算，只作量级。实测比较的是文本长度。</p>
+    <table>
+      <thead>
+        <tr><th>项目</th><th>0.10.3</th><th>0.10.4</th><th>节省</th><th>约合 token</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>MCP 服务器说明</td>
+          <td>1,974 字符</td>
+          <td>460 字符</td>
+          <td class="pass">77%</td>
+          <td>约 494 → 115</td>
+        </tr>
+        <tr>
+          <td>31 条工具描述</td>
+          <td>4,728 字符</td>
+          <td>1,818 字符</td>
+          <td class="pass">62%</td>
+          <td>约 1,182 → 455</td>
+        </tr>
+        <tr>
+          <td>说明 + 工具描述合计</td>
+          <td>6,702 字符</td>
+          <td>2,278 字符</td>
+          <td class="pass">66%</td>
+          <td>约 1,676 → 570</td>
+        </tr>
+        <tr>
+          <td>15 个策展节点摘要</td>
+          <td>3,676 字符</td>
+          <td>785 字符</td>
+          <td class="pass">79%</td>
+          <td>约 919 → 196</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">每次连上 MCP 都会带上说明和工具描述。这一项每次会话大约少 1,100 个 token。策展图被 <code>ask</code> 或 <code>graph</code> 读到时，摘要大约少 720 个 token。</p>
+
+    <h2>Bootstrap 提交</h2>
+    <p class="note">按当前仓库合格文本、排除 lockfile 后计算。旧路径是 12,000 字符切块，每块一次总结再加一次文件总结。新路径是 20,000 字符，单块文件只提交一次文件总结。</p>
+    <table>
+      <thead>
+        <tr><th></th><th>12,000 字符、两步提交</th><th>20,000 字符、单块直通</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>合格文件</td><td>111</td><td>111</td></tr>
+        <tr><td>切块数</td><td>128</td><td>114</td></tr>
+        <tr><td>单块文件</td><td>95</td><td>108</td></tr>
+        <tr><td>总结提交次数</td><td>239</td><td>117</td></tr>
+        <tr><td>下降</td><td></td><td class="pass">51%（少 122 次）</td></tr>
+      </tbody>
+    </table>
+
+    <h2>单次检索包体</h2>
+    <table>
+      <thead>
+        <tr><th>调用</th><th>包体</th><th>约合 token</th><th>内容</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>ask</code>「validate curation patch」</td>
+          <td>6,937 字符</td>
+          <td>约 1,734</td>
+          <td>仍低于 7,000 字符上限。下游是 <code>applyGraphPatch</code> 和 <code>auditGraph</code></td>
+        </tr>
+        <tr>
+          <td><code>grep</code>「Graph patch rejected」</td>
+          <td>818 字符</td>
+          <td>约 205</td>
+          <td>只剩 <code>applyGraphPatch</code>，测试组没有占预算</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>速度</h2>
+    <p class="note">同一进程里先刷新索引，再测热路径。刷新解析了 14 个文件，热重建解析数为 0。</p>
+    <table>
+      <thead>
+        <tr><th>步骤</th><th>耗时</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>结构索引刷新</td><td>560.5 ms</td><td>解析 14 个文件</td></tr>
+        <tr><td>热重建</td><td>48.5 ms</td><td>0 个文件重新解析</td></tr>
+        <tr><td>第一次 ask</td><td>15.4 ms</td><td>建立目录时间戳</td></tr>
+        <tr><td>第二次 ask</td><td class="pass">9.5 ms</td><td>索引构建耗时 0 ms</td></tr>
+        <tr><td>第一次 grep</td><td>6.3 ms</td><td></td></tr>
+        <tr><td>第二次 grep</td><td class="pass">3.4 ms</td><td>其中扫描 2.15 ms</td></tr>
+      </tbody>
+    </table>
+
+    <h2>对照</h2>
+    <table>
+      <thead>
+        <tr><th>路径</th><th>优化前实测</th><th>这次</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>热 ask</td><td>65–75 ms</td><td>9.5–15.4 ms</td></tr>
+        <tr><td>热 grep</td><td>约 60 ms</td><td>3.4–6.3 ms</td></tr>
+        <tr><td>grep 包体</td><td>约 2,800 字符，含测试组</td><td>818 字符，只有正文</td></tr>
+      </tbody>
+    </table>
+    <p class="note">命令：<code>npx tsx</code> 对本仓库调用 <code>buildStructuralIndex</code>、<code>askProject</code>、<code>grepStructure</code>，并用 <code>git show 312c60f</code> 对比提示词和策展摘要。</p>
+  </main>
+</body>
+</html>

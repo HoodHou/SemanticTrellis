@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SemanticTrellis 多实例验收</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c1917;
+      --muted: #57534e;
+      --line: #e7e5e4;
+      --paper: #fafaf9;
+      --card: #ffffff;
+      --pass: #166534;
+      --pass-bg: #f0fdf4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+    }
+    h1 { font-size: 28px; line-height: 1.2; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 32px 0 12px; }
+    p { margin: 0; }
+    .meta { color: var(--muted); font-size: 14px; }
+    .verdict {
+      background: var(--pass-bg);
+      color: var(--pass);
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .stat b { display: block; font-size: 22px; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th { background: #f5f5f4; font-weight: 650; }
+    tr:last-child td { border-bottom: 0; }
+    .pass { color: var(--pass); font-weight: 650; }
+    code {
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 12.5px;
+    }
+    .note { margin-top: 16px; color: var(--muted); font-size: 14px; }
+    @media (max-width: 720px) {
+      .stats { grid-template-columns: 1fr 1fr; }
+      header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>多实例隔离验收</h1>
+        <p class="meta">SemanticTrellis 0.10.4 · 2026-10-16 16:07 · Windows · Vitest 4.1.10</p>
+      </div>
+      <div class="verdict">通过 · 2 / 2</div>
+    </header>
+
+    <section class="stats">
+      <div class="stat"><b>2</b><span>测试用例</span></div>
+      <div class="stat"><b>6</b><span>同时存在的仓库实例</span></div>
+      <div class="stat"><b>1.18 s</b><span>用例耗时</span></div>
+      <div class="stat"><b>0</b><span>跨实例泄漏</span></div>
+    </section>
+
+    <h2>结论</h2>
+    <p>同一进程里并发运行多个仓库和多个 MCP 服务时，索引、检索、同步和审核队列都留在各自的仓库根目录内。改一个实例不会让另一个实例读到新内容。</p>
+
+    <h2>用例 1 · 三种仓库同时工作</h2>
+    <p class="meta">keeps concurrent TypeScript, Python, and projection repositories isolated · 835 ms</p>
+    <table>
+      <thead>
+        <tr><th>实例</th><th>检查</th><th>结果</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>TypeScript</td>
+          <td>结构索引只包含 <code>src/alpha.ts</code></td>
+          <td><code>["src/alpha.ts"]</code></td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>Python</td>
+          <td>结构索引只包含 <code>src/worker.py</code></td>
+          <td><code>["src/worker.py"]</code></td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>投影文档</td>
+          <td>索引包含 Markdown 和 <code>.strellis.json</code></td>
+          <td><code>design/items.xlsx.strellis.json</code><br><code>docs/guide.md</code></td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>TypeScript ask</td>
+          <td>查询 <code>alpha-only</code> 不混入 Python 文件</td>
+          <td>命中 <code>src/alpha.ts</code>，没有 <code>.py</code></td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>Python grep</td>
+          <td>查询 <code>python-only</code></td>
+          <td>唯一分组 <code>src/worker.py</code></td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>投影 ask</td>
+          <td>查询 <code>InstanceTable</code></td>
+          <td>命中表符号，没有 <code>alpha</code></td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>改动隔离</td>
+          <td>只改 TypeScript 和 Python 后，投影仓库搜索 <code>alpha-edited</code></td>
+          <td>TypeScript 1 条命中，投影仓库 0 条</td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>同步与审核</td>
+          <td>两个仓库同时 sync，再读 review context</td>
+          <td>队列分别是 <code>src/alpha.ts</code> 和 <code>src/worker.py</code></td>
+          <td class="pass">通过</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>用例 2 · 三个 MCP 服务同时在线</h2>
+    <p class="meta">binds three MCP servers to three roots at the same time · 347 ms</p>
+    <table>
+      <thead>
+        <tr><th>服务</th><th>绑定内容</th><th>ask 结果</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>instance-0</td>
+          <td><code>export const marker = "instance-a"</code></td>
+          <td>只包含 <code>instance-a</code></td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>instance-1</td>
+          <td><code>export const marker = "instance-b"</code></td>
+          <td>只包含 <code>instance-b</code></td>
+          <td class="pass">通过</td>
+        </tr>
+        <tr>
+          <td>instance-2</td>
+          <td><code>export const marker = "instance-c"</code></td>
+          <td>只包含 <code>instance-c</code></td>
+          <td class="pass">通过</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">三个 <code>semantic_trellis_status</code> 都没有报错。三个 <code>semantic_trellis_ask</code> 同时发出，响应里没有出现其他实例的标记。</p>
+
+    <h2>运行记录</h2>
+    <table>
+      <tbody>
+        <tr><th>命令</th><td><code>npx vitest run test/multi-instance.test.ts --reporter=verbose</code></td></tr>
+        <tr><th>文件</th><td><code>test/multi-instance.test.ts</code></td></tr>
+        <tr><th>结果</th><td>Test Files 1 passed · Tests 2 passed · Duration 1.72 s</td></tr>
+        <tr><th>退出码</th><td>0</td></tr>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

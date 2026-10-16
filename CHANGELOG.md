@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.5 - 2026-10-16
+
+### Added
+
+- Copyable MCP configuration for Cursor and Claude Code, plus the first-review
+  and daily sync-to-curate host workflow.
+
 ## 0.10.4 - 2026-10-16
 
 ### Changed

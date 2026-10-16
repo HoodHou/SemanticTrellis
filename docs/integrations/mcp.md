@@ -47,6 +47,7 @@ exposed as conservative `invoke` edges.
 | `semantic_trellis_graph` | Read the complete graph or a directional neighborhood |
 | `semantic_trellis_search` | Search curated nodes and source provenance |
 | `semantic_trellis_review_queue` | Read pending semantic review work |
+| `semantic_trellis_review_context` | Read structural deltas, a safe candidate patch, and a draft patch |
 | `semantic_trellis_audit` | Read integrity, provenance, and coverage findings |
 | `semantic_trellis_sync` | Update disposable snapshot state and review queue |
 | `semantic_trellis_structure` | Incrementally refresh symbols, references, and edges |
@@ -64,30 +65,53 @@ exposed as conservative `invoke` edges.
 - `semantic-trellis://graph`
 - `semantic-trellis://review-queue`
 
-## Safe curation workflow
+## One server, one repository
 
-Agents must never call `semantic_trellis_apply_patch` directly.
+Each MCP process receives one repository root and cannot be redirected by a
+tool argument. Run a separate process for each repository. Three servers bound
+to three roots in one test process keep their indexes, asks, sync results, and
+review queues apart (`test/multi-instance.test.ts`).
 
-1. Read status and pending review work.
-2. Use `semantic_trellis_ask` for a natural-language source bundle, or a more
-   specific structural tool when the task already has an exact identifier.
-3. Let structural read tools repair ordinary source deltas automatically; use
-   `semantic_trellis_structure` when an explicit full refresh is desired.
-4. Read or search the relevant curated or structural neighborhood.
-5. Build a small graph patch with source evidence.
-6. Call `semantic_trellis_validate_patch`.
-7. Present the proposed change to the user and obtain approval.
-8. Call `semantic_trellis_apply_patch` with the unchanged patch and validation
-   token.
+## First review
 
-The server rejects the write if the graph, patch, or a review entry selected by
-`mark-reviewed` changed after validation. Review changes on unrelated paths do
-not invalidate the token.
+1. `semantic_trellis_bootstrap_preview`. Show the disclosure manifest to the user.
+2. After explicit approval, `semantic_trellis_bootstrap_start` with
+   `sourceDisclosureApproved: true`.
+3. For each `fastPath` unit from `semantic_trellis_bootstrap_next_batch`, submit
+   one file summary. Other files use chunk summaries, then
+   `semantic_trellis_bootstrap_next_rollups` and file summaries.
+4. Page `semantic_trellis_bootstrap_context`, propose a sourced graph patch,
+   `semantic_trellis_validate_patch`, obtain approval, then
+   `semantic_trellis_apply_patch`.
+5. `semantic_trellis_bootstrap_complete`.
 
-The first full review has an earlier consent boundary: call
-`semantic_trellis_bootstrap_preview`, show its manifest to the user, and call
-`semantic_trellis_bootstrap_start` only after explicit source-disclosure
-approval. Full workflow details are in `docs/ai-bootstrap.md`.
+Details are in `docs/ai-bootstrap.md`.
+
+## Daily maintenance
+
+1. `semantic_trellis_sync`.
+2. `semantic_trellis_review_context`.
+3. Apply `candidatePatch` for implementation-only edits and pure file moves.
+4. Edit `draftPatch` for signature changes, cross-file reference changes,
+   additions, and removals. Add `mark-reviewed` only after the node text is
+   updated. Do not apply an unchanged draft as if the review were finished.
+5. `semantic_trellis_validate_patch`.
+6. Show the patch to the user and obtain approval.
+7. `semantic_trellis_apply_patch` with the same patch and token.
+
+Never call `semantic_trellis_apply_patch` without that validation. The server
+rejects the write if the graph, patch, or a review entry selected by
+`mark-reviewed` changed. Unrelated review items do not invalidate the token.
+
+Use `semantic_trellis_ask` when the task needs source. Use grep or trace when
+the identifier is already known.
+
+## Host configuration
+
+Copy [mcp.json.example](mcp.json.example) and replace both absolute paths.
+The first argument is this package's `dist/mcp/stdio.js`. The second is the
+repository to bind. Cursor reads `.cursor/mcp.json`. Claude Code reads
+`.mcp.json` in the project root. Both use the same `mcpServers` object.
 
 ## Codex project configuration
 
