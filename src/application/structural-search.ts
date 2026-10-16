@@ -1,9 +1,11 @@
+import type { GraphSearchHit } from "../domain/query.js";
+import { searchGraph } from "../domain/query.js";
 import type {
   StructuralBuildMetrics,
   StructuralSymbolSearchHit,
 } from "../domain/structural.js";
 import { loadGraph } from "../infrastructure/project-store.js";
-import { searchStructuralSymbols } from "../structural/queries.js";
+import { searchStructuralSymbols, selectCalleeCruxSymbols } from "../structural/queries.js";
 import { ensureStructuralIndex } from "./structure.js";
 import {
   getSymbolSourceContexts,
@@ -28,6 +30,8 @@ export interface StructuralAskOptions {
 
 export interface StructuralAskResult extends StructuralSymbolSearchResult {
   sourceContexts: StructuralSymbolSource[];
+  calleeCruxes: StructuralSymbolSource[];
+  curatedNodes: GraphSearchHit[];
 }
 
 function curatedSources(graph: Awaited<ReturnType<typeof loadGraph>>): Map<string, string[]> {
@@ -92,6 +96,17 @@ export async function askProject(
       contribution.hash,
     ]),
   );
+  const includeBody = options.includeBody !== false;
+  const totalSourceCharacters = options.maxSourceCharacters ??
+    (options.fullBody === true ? 20_000 : 4_000);
+  const callees = includeBody
+    ? selectCalleeCruxSymbols(built.index, hits, query, 2)
+    : [];
+  const desiredCalleeBudget = !includeBody || callees.length === 0
+    ? 0
+    : Math.min(1_600, Math.floor(totalSourceCharacters * 0.34));
+  const calleeBudget = desiredCalleeBudget >= 80 ? desiredCalleeBudget : 0;
+  const primaryBudget = totalSourceCharacters - calleeBudget;
   return {
     query,
     hits,
@@ -99,15 +114,27 @@ export async function askProject(
       root,
       hits.map((hit) => hit.symbol),
       {
-        includeBody: options.includeBody !== false,
-        maxSourceCharacters: options.maxSourceCharacters ??
-          (options.fullBody === true ? 20_000 : 4_000),
+        includeBody,
+        maxSourceCharacters: primaryBudget,
         ...(options.fullBody === true ? {} : { maxLinesPerSymbol: 8 }),
         query,
         repairStale: options.repairStale !== false,
       },
       hashes,
     ),
+    calleeCruxes: await getSymbolSourceContexts(
+      root,
+      calleeBudget === 0 ? [] : callees,
+      {
+        includeBody,
+        maxSourceCharacters: calleeBudget,
+        maxLinesPerSymbol: 8,
+        query,
+        repairStale: options.repairStale !== false,
+      },
+      hashes,
+    ),
+    curatedNodes: searchGraph(graph, query, 2),
     build: built.metrics,
   };
 }

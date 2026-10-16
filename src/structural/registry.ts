@@ -1,7 +1,9 @@
 import { extname } from "node:path";
 import { CSharpLanguageAdapter } from "../adapters/csharp/csharp-adapter.js";
 import { LuaLanguageAdapter } from "../adapters/lua/lua-adapter.js";
+import { MarkdownLanguageAdapter } from "../adapters/markdown/markdown-adapter.js";
 import { PythonLanguageAdapter } from "../adapters/python/python-adapter.js";
+import { StrellisJsonLanguageAdapter } from "../adapters/strellis-json/strellis-json-adapter.js";
 import { TypeScriptLanguageAdapter } from "../adapters/typescript/typescript-adapter.js";
 import type { LanguageAdapter } from "../ports/language-adapter.js";
 
@@ -21,7 +23,10 @@ export class LanguageRegistry {
   }
 
   adapterFor(path: string): LanguageAdapter | null {
-    return this.byExtension.get(extname(path).toLowerCase()) ?? null;
+    const adapter = this.byExtension.get(extname(path).toLowerCase()) ?? null;
+    if (adapter === null) return null;
+    if (adapter.matches !== undefined && !adapter.matches(path)) return null;
+    return adapter;
   }
 }
 
@@ -29,7 +34,9 @@ export function createDefaultLanguageRegistry(): LanguageRegistry {
   return new LanguageRegistry([
     new CSharpLanguageAdapter(),
     new LuaLanguageAdapter(),
+    new MarkdownLanguageAdapter(),
     new PythonLanguageAdapter(),
+    new StrellisJsonLanguageAdapter(),
     new TypeScriptLanguageAdapter(),
   ]);
 }

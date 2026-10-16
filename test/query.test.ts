@@ -68,4 +68,35 @@ describe("graph query", () => {
     expect(searchGraph(graph, "Graph Domain")[0]?.node.id).toBe("domain");
     expect(searchGraph(graph, "src/cli")[0]?.node.id).toBe("cli");
   });
+
+  it("ranks a rare curated term above repeated graph wording", () => {
+    const ranked = searchGraph({
+      ...graph,
+      nodes: [
+        ...graph.nodes,
+        {
+          id: "graph-note",
+          name: "Graph note",
+          kind: "concept",
+          summary: "Another graph note about the graph.",
+          sources: [{ path: "docs/graph.md", role: "supporting" }],
+          tags: ["graph"],
+          status: "approved",
+          locked: false,
+        },
+        {
+          id: "integrity",
+          name: "Referential integrity",
+          kind: "invariant",
+          summary: "Referential integrity rejects a dangling edge.",
+          sources: [{ path: "src/domain/graph.ts", role: "primary" }],
+          tags: ["integrity"],
+          status: "approved",
+          locked: true,
+        },
+      ],
+    }, "referential integrity", 3);
+    expect(ranked[0]?.node.id).toBe("integrity");
+    expect(ranked[0]?.matchedFields).toEqual(expect.arrayContaining(["name", "summary"]));
+  });
 });

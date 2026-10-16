@@ -14,6 +14,10 @@ import { rememberVerifiedSource } from "../infrastructure/source-cache.js";
 import { loadStructuralIndex, saveStructuralIndex } from "../infrastructure/structural-store.js";
 import { decodeSourceText } from "../infrastructure/text-decoder.js";
 import { digestBytes } from "../infrastructure/digest.js";
+import {
+  attachCrossLayerReferences,
+  crossLayerFingerprint,
+} from "../structural/cross-layer.js";
 import { resolveStructuralGraph } from "../structural/resolver.js";
 
 function contributionReferenceNames(contribution: FileContribution): string[] {
@@ -226,6 +230,7 @@ export async function buildStructuralIndex(root: string): Promise<StructuralBuil
     forceHash,
   });
   const contributions: Record<string, FileContribution> = {};
+  const parsedSources = new Map<string, string>();
   let filesSupported = 0;
   let parsedFiles = 0;
   let reusedFiles = 0;
@@ -259,13 +264,15 @@ export async function buildStructuralIndex(root: string): Promise<StructuralBuil
       await readFile(resolve(absoluteRoot, file.path)),
       file.path,
     );
-    contributions[file.path] = adapter.extract({
+    const extracted = adapter.extract({
       path: file.path,
       hash: file.hash,
       size: file.size,
       mtimeMs: file.mtimeMs ?? 0,
       source,
     });
+    contributions[file.path] = extracted;
+    parsedSources.set(file.path, source);
     rememberVerifiedSource(
       absoluteRoot,
       file.path,
@@ -282,7 +289,31 @@ export async function buildStructuralIndex(root: string): Promise<StructuralBuil
   for (const path of Object.keys(contributions)) previousPaths.delete(path);
   const removedFiles = previousPaths.size;
   for (const path of previousPaths) changedPaths.add(path);
-  const contributionsChanged = previous === null || parsedFiles > 0 || removedFiles > 0;
+  const crossLayerSources = new Map(parsedSources);
+  if (crossLayerFingerprint(previous?.contributions ?? {}) !== crossLayerFingerprint(contributions)) {
+    for (const path of Object.keys(contributions)) {
+      if (crossLayerSources.has(path)) continue;
+      if (contributions[path]?.language === "markdown" || contributions[path]?.language === "strellis-json") {
+        continue;
+      }
+      try {
+        const bytes = await readFile(resolve(absoluteRoot, path));
+        crossLayerSources.set(path, decodeSourceText(bytes, path));
+      } catch {
+        // A file that disappeared is already represented as a removed contribution.
+      }
+    }
+  }
+  const crossLayer = attachCrossLayerReferences(contributions, crossLayerSources);
+  for (const path of crossLayer.changedPaths) {
+    const updated = crossLayer.contributions[path];
+    if (updated !== undefined) contributions[path] = updated;
+    changedPaths.add(path);
+  }
+  const contributionsChanged = previous === null ||
+    parsedFiles > 0 ||
+    removedFiles > 0 ||
+    crossLayer.changedPaths.length > 0;
   let edges;
   let resolution;
   let resolutionByFile: StructuralIndex["resolutionByFile"];

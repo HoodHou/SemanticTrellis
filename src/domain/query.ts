@@ -89,6 +89,27 @@ export function graphNeighborhood(
   };
 }
 
+function normalizedWords(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}_]+/u)
+    .filter(Boolean);
+}
+
+function normalizedSearchTerm(value: string): string {
+  if (
+    value.length > 4 &&
+    value.endsWith("s") &&
+    !value.endsWith("ss") &&
+    !value.endsWith("us") &&
+    !value.endsWith("is")
+  ) {
+    return value.slice(0, -1);
+  }
+  return value;
+}
+
 function includes(text: string, query: string): boolean {
   return text.toLowerCase().includes(query);
 }
@@ -100,52 +121,111 @@ export function searchGraph(
 ): GraphSearchHit[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return [];
-  const terms = normalized.split(/\s+/).filter(Boolean);
+  const terms = [...new Set(normalizedWords(normalized).map(normalizedSearchTerm))];
+  const documents = graph.nodes.map((node) => ({
+    node,
+    id: node.id.toLowerCase(),
+    name: node.name.toLowerCase(),
+    kind: node.kind.toLowerCase(),
+    summary: node.summary.toLowerCase(),
+    tags: node.tags.map((tag) => tag.toLowerCase()),
+    sources: node.sources.map((source) => source.path.toLowerCase()),
+  }));
+  const documentFrequency = new Map(
+    terms.map((term) => [
+      term,
+      documents.filter((document) =>
+        document.id.includes(term) ||
+        document.name.includes(term) ||
+        document.kind.includes(term) ||
+        document.summary.includes(term) ||
+        document.tags.some((tag) => tag.includes(term)) ||
+        document.sources.some((source) => source.includes(term)),
+      ).length,
+    ]),
+  );
+  const idf = new Map(
+    terms.map((term) => [
+      term,
+      Math.log((documents.length + 1) / ((documentFrequency.get(term) ?? 0) + 1)) + 1,
+    ]),
+  );
+  const searchableTerms = terms.filter((term) => (documentFrequency.get(term) ?? 0) > 0);
+  const totalQueryWeight = searchableTerms.reduce(
+    (total, term) => total + (idf.get(term) ?? 1),
+    0,
+  );
   const hits: GraphSearchHit[] = [];
 
-  for (const node of graph.nodes) {
+  for (const document of documents) {
     let score = 0;
     const fields = new Set<string>();
-    const id = node.id.toLowerCase();
-    const name = node.name.toLowerCase();
-    if (id === normalized || name === normalized) {
+    const matchedTerms = new Set<string>();
+    if (document.id === normalized || document.name === normalized) {
       score += 100;
-      fields.add(id === normalized ? "id" : "name");
+      fields.add(document.id === normalized ? "id" : "name");
     } else {
-      if (id.includes(normalized)) {
+      if (document.id.includes(normalized)) {
         score += 35;
         fields.add("id");
       }
-      if (name.includes(normalized)) {
+      if (document.name.includes(normalized)) {
         score += 45;
         fields.add("name");
       }
     }
 
     for (const term of terms) {
-      if (name.includes(term)) {
-        score += 12;
+      const weight = idf.get(term) ?? 1;
+      let matched = false;
+      if (document.name.includes(term)) {
+        score += 12 * weight;
         fields.add("name");
+        matched = true;
       }
-      if (node.tags.some((tag) => includes(tag, term))) {
-        score += 9;
+      if (document.id.includes(term)) {
+        score += 8 * weight;
+        fields.add("id");
+        matched = true;
+      }
+      if (document.tags.some((tag) => includes(tag, term))) {
+        score += 9 * weight;
         fields.add("tags");
+        matched = true;
       }
-      if (includes(node.summary, term)) {
-        score += 4;
+      if (includes(document.summary, term)) {
+        score += 4 * weight;
         fields.add("summary");
+        matched = true;
       }
-      if (node.sources.some((source) => includes(source.path, term))) {
-        score += 6;
+      if (document.sources.some((source) => includes(source, term))) {
+        score += 6 * weight;
         fields.add("sources");
+        matched = true;
       }
-      if (node.kind.includes(term)) {
-        score += 3;
+      if (document.kind.includes(term)) {
+        score += 3 * weight;
         fields.add("kind");
+        matched = true;
       }
+      if (matched) matchedTerms.add(term);
+    }
+    if (matchedTerms.size > 0 && totalQueryWeight > 0) {
+      const matchedWeight = [...matchedTerms].reduce(
+        (total, term) => total + (idf.get(term) ?? 1),
+        0,
+      );
+      score += (matchedWeight / totalQueryWeight) * 20;
+      if (terms.length > 1 && matchedTerms.size === terms.length) score += 12;
     }
 
-    if (score > 0) hits.push({ node, score, matchedFields: [...fields].sort() });
+    if (score > 0) {
+      hits.push({
+        node: document.node,
+        score: Number(score.toFixed(3)),
+        matchedFields: [...fields].sort(),
+      });
+    }
   }
 
   return hits

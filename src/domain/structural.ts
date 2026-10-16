@@ -1,33 +1,43 @@
-export const STRUCTURAL_SCHEMA_VERSION = 7 as const;
+export const STRUCTURAL_SCHEMA_VERSION = 8 as const;
 
-export type StructuralSymbolKind =
-  | "file"
-  | "module"
-  | "class"
-  | "interface"
-  | "struct"
-  | "record"
-  | "type"
-  | "enum"
-  | "delegate"
-  | "function"
-  | "callback"
-  | "method"
-  | "constructor"
-  | "destructor"
-  | "operator"
-  | "property"
-  | "field"
-  | "event"
-  | "variable";
+export const STRUCTURAL_SYMBOL_KINDS = [
+  "file",
+  "module",
+  "class",
+  "interface",
+  "struct",
+  "record",
+  "type",
+  "enum",
+  "delegate",
+  "function",
+  "callback",
+  "method",
+  "constructor",
+  "destructor",
+  "operator",
+  "property",
+  "field",
+  "event",
+  "variable",
+  "heading",
+  "table",
+  "sheet",
+] as const;
 
-export type StructuralReferenceKind =
-  | "call"
-  | "invoke"
-  | "construct"
-  | "import"
-  | "extends"
-  | "implements";
+export type StructuralSymbolKind = (typeof STRUCTURAL_SYMBOL_KINDS)[number];
+
+export const STRUCTURAL_REFERENCE_KINDS = [
+  "call",
+  "invoke",
+  "construct",
+  "import",
+  "extends",
+  "implements",
+  "references",
+] as const;
+
+export type StructuralReferenceKind = (typeof STRUCTURAL_REFERENCE_KINDS)[number];
 
 export interface SourceSpan {
   startLine: number;

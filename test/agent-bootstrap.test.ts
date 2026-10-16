@@ -179,4 +179,89 @@ describe("Agent-driven AI bootstrap", () => {
     );
     expect((await getAgentBootstrapStatus(root)).stage).toBe("summarize-chunks");
   });
+
+  it("accepts one file summary for a single-chunk file and still requires every multi-chunk summary", async () => {
+    const root = await fixture();
+    const started = await startAgentBootstrap(root, {
+      sourceDisclosureApproved: true,
+      maxChunkCharacters: 2_000,
+    });
+    const batch = await getNextBootstrapSourceBatch(root, 50_000, 10);
+    const small = batch.units.find((unit) => unit.path.endsWith("small.ts"));
+    const largeChunk = batch.units.find((unit) => unit.path.endsWith("large.ts"));
+    expect(small).toMatchObject({ fastPath: true, chunkCount: 1 });
+    expect(small?.structural?.symbols).toEqual(
+      expect.arrayContaining([expect.objectContaining({ qualifiedName: "small" })]),
+    );
+    expect(largeChunk).toMatchObject({ fastPath: false });
+    expect(largeChunk?.chunkCount).toBeGreaterThan(1);
+
+    const summaryFor = (path: string, hash: string) => ({
+      path,
+      hash,
+      summary: `File summary for ${path}.`,
+      responsibilities: ["exports a constant"],
+      keySymbols: ["small"],
+      dependencies: [],
+      inputs: [],
+      outputs: [],
+      sideEffects: [],
+      risks: [],
+      concepts: ["constant"],
+      evidence: [{ startLine: 1, endLine: 1, description: "frozen source" }],
+      confidence: 0.91,
+      producer: "test-agent",
+      model: null,
+    });
+    await expect(submitBootstrapFileSummaries(
+      root,
+      started.status.sessionId,
+      [summaryFor(largeChunk?.path ?? "", largeChunk?.hash ?? "")],
+    )).rejects.toThrow(/must be summarized/);
+
+    const fastStatus = await submitBootstrapFileSummaries(
+      root,
+      started.status.sessionId,
+      [summaryFor(small?.path ?? "", small?.hash ?? "")],
+    );
+    expect(fastStatus.summarizedFiles).toBe(1);
+    expect(fastStatus.summarizedChunks).toBe(1);
+    expect(fastStatus.chunkCoverage).toBeGreaterThan(0);
+    expect(fastStatus.chunkCoverage).toBeLessThan(1);
+    const rollups = await getNextBootstrapRollups(root, 10);
+    expect(rollups.files.map((file) => file.path)).not.toContain(small?.path);
+
+    await expect(submitBootstrapFileSummaries(root, started.status.sessionId, [{
+      ...summaryFor(small?.path ?? "", small?.hash ?? ""),
+      hash: "a".repeat(64),
+    }])).rejects.toThrow(/hash/);
+
+    let pending = await getNextBootstrapSourceBatch(root, 50_000, 10);
+    while (pending.units.length > 0) {
+      await submitBootstrapChunkSummaries(
+        root,
+        pending.sessionId,
+        pending.units.map((unit) => ({
+          unitId: unit.id,
+          summary: `Chunk ${unit.chunkIndex} of ${unit.path}.`,
+          keyFacts: [],
+          risks: [],
+          confidence: 0.8,
+          producer: "test-agent",
+          model: null,
+        })),
+      );
+      pending = await getNextBootstrapSourceBatch(root, 50_000, 10);
+    }
+    const largeRollup = await getNextBootstrapRollups(root, 10);
+    expect(largeRollup.files).toHaveLength(1);
+    const complete = await submitBootstrapFileSummaries(
+      root,
+      largeRollup.sessionId,
+      largeRollup.files.map((file) => summaryFor(file.path, file.hash)),
+    );
+    expect(complete.chunkCoverage).toBe(1);
+    expect(complete.fileCoverage).toBe(1);
+    expect(complete.stage).toBe("ready-for-curation");
+  });
 });

@@ -260,7 +260,14 @@ export async function loadReviewQueue(root: string): Promise<ReviewQueue> {
   if (value === null) return { schemaVersion: SCHEMA_VERSION, items: [] };
   const input = record(value, "Review queue");
   schema(input.schemaVersion, "Review queue");
-  return value as ReviewQueue;
+  const queue = value as ReviewQueue;
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    items: queue.items.map((item) => ({
+      ...item,
+      structuralDelta: item.structuralDelta ?? null,
+    })),
+  };
 }
 
 export async function loadPatch(path: string): Promise<GraphPatch> {

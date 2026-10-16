@@ -1,5 +1,9 @@
 import * as z from "zod/v4";
 import type { GraphPatch } from "../domain/model.js";
+import {
+  STRUCTURAL_REFERENCE_KINDS,
+  STRUCTURAL_SYMBOL_KINDS,
+} from "../domain/structural.js";
 
 export const sourceReferenceSchema = z.object({
   path: z.string().min(1).describe("Repository-relative source path."),
@@ -120,6 +124,47 @@ export const reviewItemSchema = z.object({
   beforeHash: z.string().nullable(),
   afterHash: z.string().nullable(),
   relatedNodeIds: z.array(z.string()),
+  structuralDelta: z.object({
+    nature: z.enum([
+      "implementation-only",
+      "symbol-signature-changed",
+      "cross-node-reference-changed",
+      "file-moved",
+      "source-added",
+      "source-removed",
+    ]),
+    movedFrom: z.string().nullable(),
+    movedTo: z.string().nullable(),
+    symbolChanges: z.array(z.object({
+      change: z.enum(["added", "removed", "signature-changed"]),
+      name: z.string(),
+      qualifiedName: z.string(),
+      kind: z.string(),
+      beforeSignature: z.string().nullable(),
+      afterSignature: z.string().nullable(),
+    })),
+    referenceChanges: z.array(z.object({
+      change: z.enum(["added", "removed"]),
+      kind: z.string(),
+      ownerQualifiedName: z.string(),
+      targetName: z.string(),
+      targetPath: z.string().nullable(),
+    })),
+  }).nullable(),
+});
+
+export const reviewContextOutputSchema = z.object({
+  total: z.number().int().nonnegative(),
+  returned: z.number().int().nonnegative(),
+  items: z.array(reviewItemSchema.extend({
+    affectedNodes: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      kind: semanticNodeSchema.shape.kind,
+      summary: z.string(),
+    })),
+  })),
+  candidatePatch: graphPatchSchema.nullable(),
 });
 
 export const reviewQueueOutputSchema = z.object({
@@ -186,27 +231,7 @@ export const structuralSymbolSchema = z.object({
   path: z.string(),
   name: z.string(),
   qualifiedName: z.string(),
-  kind: z.enum([
-    "file",
-    "module",
-    "class",
-    "interface",
-    "struct",
-    "record",
-    "type",
-    "enum",
-    "delegate",
-    "function",
-    "callback",
-    "method",
-    "constructor",
-    "destructor",
-    "operator",
-    "property",
-    "field",
-    "event",
-    "variable",
-  ]),
+  kind: z.enum(STRUCTURAL_SYMBOL_KINDS),
   span: sourceSpanSchema,
   signature: z.string(),
   parentId: z.string().nullable(),
@@ -221,7 +246,7 @@ export const structuralEdgeSchema = z.object({
   id: z.string(),
   from: z.string(),
   to: z.string(),
-  kind: z.enum(["call", "invoke", "construct", "import", "extends", "implements"]),
+  kind: z.enum(STRUCTURAL_REFERENCE_KINDS),
   referenceId: z.string(),
 });
 
@@ -330,6 +355,12 @@ export const structuralSymbolSearchOutputSchema = z.object({
 
 export const structuralAskOutputSchema = structuralSymbolSearchOutputSchema.extend({
   sourceContexts: z.array(structuralSymbolSourceSchema),
+  calleeCruxes: z.array(structuralSymbolSourceSchema),
+  curatedNodes: z.array(z.object({
+    node: semanticNodeSchema,
+    score: z.number(),
+    matchedFields: z.array(z.string()),
+  })),
 });
 
 export const projectionRefreshMetricsSchema = z.object({

@@ -188,11 +188,24 @@ export function applyFileSummarySubmissions(
     assertFileSummary(submission);
     const units = unitsByPath.get(submission.path);
     if (units === undefined) throw new Error(`Unknown bootstrap file: ${submission.path}`);
-    if (units.some((unit) => unit.summary === null)) {
-      throw new Error(`All chunks for ${submission.path} must be summarized before file rollup.`);
-    }
     if (units.some((unit) => unit.hash !== submission.hash)) {
       throw new Error(`File summary hash does not match the frozen snapshot: ${submission.path}`);
+    }
+    const singleChunk = units.length === 1 && units[0]?.chunkCount === 1 ? units[0] : undefined;
+    if (singleChunk !== undefined && singleChunk.summary === null) {
+      singleChunk.summary = {
+        summary: submission.summary,
+        keyFacts: submission.responsibilities.length > 0
+          ? [...submission.responsibilities]
+          : [...submission.concepts],
+        risks: [...submission.risks],
+        confidence: submission.confidence,
+        producer: submission.producer,
+        model: submission.model,
+      };
+    }
+    if (units.some((unit) => unit.summary === null)) {
+      throw new Error(`All chunks for ${submission.path} must be summarized before file rollup.`);
     }
     next.fileSummaries[submission.path] = structuredClone(submission);
   }

@@ -169,6 +169,7 @@ describe("project workflow", () => {
       beforeHash: null,
       afterHash: "a".repeat(64),
       relatedNodeIds: [],
+      structuralDelta: null,
     };
     await saveReviewQueue(root, {
       schemaVersion: SCHEMA_VERSION,

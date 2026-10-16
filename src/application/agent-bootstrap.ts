@@ -13,6 +13,7 @@ import {
   type FileSemanticSummary,
 } from "../domain/agent-bootstrap.js";
 import { auditGraph } from "../domain/graph.js";
+import type { FileContribution } from "../domain/structural.js";
 import { digestBytes, digestJson } from "../infrastructure/digest.js";
 import { loadAgentBootstrapSession, saveAgentBootstrapSession } from "../infrastructure/agent-bootstrap-store.js";
 import { loadConfig, loadGraph, loadSnapshot } from "../infrastructure/project-store.js";
@@ -72,6 +73,30 @@ export interface AgentBootstrapPreview {
   };
 }
 
+export interface BootstrapStructuralEvidence {
+  symbols: Array<{
+    kind: string;
+    qualifiedName: string;
+    signature: string;
+    startLine: number;
+    endLine: number;
+    callArity: { min: number; max: number | null } | null;
+    partial: boolean;
+  }>;
+  references: Array<{
+    kind: string;
+    targetName: string;
+    line: number;
+    ownerSymbolId: string;
+  }>;
+  diagnostics: Array<{
+    code: string;
+    message: string;
+    line: number;
+    column: number;
+  }>;
+}
+
 export interface BootstrapSourceUnit {
   id: string;
   path: string;
@@ -81,6 +106,8 @@ export interface BootstrapSourceUnit {
   startLine: number;
   endLine: number;
   content: string;
+  fastPath: boolean;
+  structural: BootstrapStructuralEvidence | null;
 }
 
 export interface BootstrapSourceBatch {
@@ -102,29 +129,7 @@ export interface BootstrapFileRollup {
     risks: string[];
     confidence: number;
   }>;
-  structural: {
-    symbols: Array<{
-      kind: string;
-      qualifiedName: string;
-      signature: string;
-      startLine: number;
-      endLine: number;
-      callArity: { min: number; max: number | null } | null;
-      partial: boolean;
-    }>;
-    references: Array<{
-      kind: string;
-      targetName: string;
-      line: number;
-      ownerSymbolId: string;
-    }>;
-    diagnostics: Array<{
-      code: string;
-      message: string;
-      line: number;
-      column: number;
-    }>;
-  };
+  structural: BootstrapStructuralEvidence;
 }
 
 export interface BootstrapRollupBatch {
@@ -139,6 +144,32 @@ export interface BootstrapCurationContext {
   offset: number;
   nextOffset: number | null;
   summaries: FileSemanticSummary[];
+}
+
+function structuralEvidence(contribution: FileContribution | undefined): BootstrapStructuralEvidence {
+  return {
+    symbols: (contribution?.symbols ?? []).map((symbol) => ({
+      kind: symbol.kind,
+      qualifiedName: symbol.qualifiedName,
+      signature: symbol.signature,
+      startLine: symbol.span.startLine,
+      endLine: symbol.span.endLine,
+      callArity: symbol.callArity,
+      partial: symbol.partial,
+    })),
+    references: (contribution?.references ?? []).map((reference) => ({
+      kind: reference.kind,
+      targetName: reference.targetName,
+      line: reference.line,
+      ownerSymbolId: reference.ownerSymbolId,
+    })),
+    diagnostics: (contribution?.diagnostics ?? []).map((diagnostic) => ({
+      code: diagnostic.code,
+      message: diagnostic.message,
+      line: diagnostic.line,
+      column: diagnostic.column,
+    })),
+  };
 }
 
 function lineStarts(source: string): number[] {
@@ -390,6 +421,7 @@ export async function getNextBootstrapSourceBatch(
   }
 
   const sources = new Map<string, string>();
+  const structural = await loadStructuralIndex(root);
   const units: BootstrapSourceUnit[] = [];
   for (const unit of selected) {
     let source = sources.get(unit.path);
@@ -397,6 +429,7 @@ export async function getNextBootstrapSourceBatch(
       source = await readFrozenSource(root, unit.path, unit.hash);
       sources.set(unit.path, source);
     }
+    const fastPath = unit.chunkCount === 1;
     units.push({
       id: unit.id,
       path: unit.path,
@@ -406,6 +439,8 @@ export async function getNextBootstrapSourceBatch(
       startLine: unit.startLine,
       endLine: unit.endLine,
       content: source.slice(unit.startOffset, unit.endOffset),
+      fastPath,
+      structural: fastPath ? structuralEvidence(structural?.contributions[unit.path]) : null,
     });
   }
   return {
@@ -459,29 +494,7 @@ export async function getNextBootstrapRollups(
         risks: unit.summary?.risks ?? [],
         confidence: unit.summary?.confidence ?? 0,
       })),
-      structural: {
-        symbols: (contribution?.symbols ?? []).map((symbol) => ({
-          kind: symbol.kind,
-          qualifiedName: symbol.qualifiedName,
-          signature: symbol.signature,
-          startLine: symbol.span.startLine,
-          endLine: symbol.span.endLine,
-          callArity: symbol.callArity,
-          partial: symbol.partial,
-        })),
-        references: (contribution?.references ?? []).map((reference) => ({
-          kind: reference.kind,
-          targetName: reference.targetName,
-          line: reference.line,
-          ownerSymbolId: reference.ownerSymbolId,
-        })),
-        diagnostics: (contribution?.diagnostics ?? []).map((diagnostic) => ({
-          code: diagnostic.code,
-          message: diagnostic.message,
-          line: diagnostic.line,
-          column: diagnostic.column,
-        })),
-      },
+      structural: structuralEvidence(contribution),
     };
   });
   return { sessionId: session.id, pendingFiles: pendingPaths.length, files };

@@ -2,6 +2,7 @@ import { createReviewItems, mergeReviewQueue } from "../domain/review.js";
 import { createSnapshot, diffSnapshots } from "../domain/snapshot.js";
 import type { FileChangeKind } from "../domain/model.js";
 import { scanRepository } from "../infrastructure/repository-scanner.js";
+import { loadStructuralIndex } from "../infrastructure/structural-store.js";
 import {
   loadConfig,
   loadGraph,
@@ -10,6 +11,7 @@ import {
   saveReviewQueue,
   saveSnapshot,
 } from "../infrastructure/project-store.js";
+import { buildStructuralIndex } from "./structure.js";
 
 export interface SyncResult {
   files: number;
@@ -27,12 +29,19 @@ export async function syncProject(root: string): Promise<SyncResult> {
 
   const config = await loadConfig(root);
   const graph = await loadGraph(root);
+  const previousStructure = await loadStructuralIndex(root);
   const current = createSnapshot(await scanRepository(root, config.source, {
     previousFiles: previous.files,
   }));
   const changes = diffSnapshots(previous, current);
+  const nextStructure = changes.length === 0
+    ? previousStructure
+    : (await buildStructuralIndex(root)).index;
   const currentQueue = await loadReviewQueue(root);
-  const queue = mergeReviewQueue(currentQueue, createReviewItems(changes, graph));
+  const queue = mergeReviewQueue(
+    currentQueue,
+    createReviewItems(changes, graph, previousStructure, nextStructure),
+  );
 
   await saveReviewQueue(root, queue);
   await saveSnapshot(root, current);

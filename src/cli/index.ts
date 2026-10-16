@@ -9,6 +9,7 @@ import {
   curateProject,
   getAgentBootstrapStatus,
   getFileSymbols,
+  buildReviewContext,
   grepStructure,
   initializeProject,
   previewAgentBootstrap,
@@ -30,10 +31,11 @@ Usage:
   strellis bootstrap-status [repository]
   strellis curate <patch-file> [repository]
   strellis sync [repository]
+  strellis review-context [repository] [--in <path>] [--json]
   strellis audit [repository]
   strellis status [repository]
   strellis structure [repository] [--json]
-  strellis grep <pattern> [repository] [--regex] [--ignore-case] [--in <path>] [--context-lines N] [--include-body] [--json]
+  strellis grep <pattern> [repository] [--regex] [--ignore-case] [--kinds <kind,kind>] [--in <path>] [--context-lines N] [--include-body] [--json]
   strellis symbols <file> [repository] [--include-body] [--json]
   strellis trace <symbol> [repository] [--direction incoming|outgoing|both] [--depth N] [--include-body] [--json]
   strellis search-symbols <query> [repository] [--limit N] [--in <path>] [--json]
@@ -48,15 +50,16 @@ Lifecycle:
   bootstrap-preview  Show the source-disclosure manifest without returning source.
   bootstrap-status  Show full-review coverage and current bootstrap stage.
   curate     Apply an explicit, validated graph patch.
-  sync       Record repository deltas without rewriting approved meaning.
+  sync       Record repository deltas and classify structural review items.
+  review-context  Show the incremental review package and candidate patch.
   audit      Verify graph integrity, provenance, and source coverage.
   status     Show the current repository and review state.
   structure  Build or incrementally refresh disposable structural contributions.
-  grep       Search indexed source and group hits by the innermost symbol.
+  grep       Search indexed source, group hits by symbol, and deprioritize tests.
   symbols    List symbols extracted from one source file.
   trace      Walk resolved structural references around a symbol.
   search-symbols  Rank structural symbols by natural-language terms and graph importance.
-  ask        Return ranked symbols and bounded verified source bodies in one call.
+  ask        Return ranked symbols, callee cruxes, curated nodes, and bounded source.
   mcp        Serve SemanticTrellis tools and resources over stdio.
 `;
 
@@ -178,6 +181,29 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
         }
         return 0;
       }
+      case "review-context": {
+        const parsed = parseArguments(rest, new Set(["--in"]));
+        const result = await buildReviewContext(
+          rootFrom(parsed.positionals[0]),
+          parsed.options.get("--in"),
+        );
+        if (parsed.flags.has("--json")) {
+          io.out(JSON.stringify(result, null, 2));
+          return 0;
+        }
+        io.out(`${result.returned} of ${result.total} review items.`);
+        for (const item of result.items) {
+          io.out(
+            `${item.path} · ${item.structuralDelta?.nature ?? item.reason} · ` +
+              `${item.affectedNodes.length} curated nodes`,
+          );
+        }
+        if (result.candidatePatch !== null) {
+          io.out("Candidate patch:");
+          io.out(JSON.stringify(result.candidatePatch, null, 2));
+        }
+        return 0;
+      }
       case "curate": {
         const patchFile = rest[0];
         if (patchFile === undefined) throw new Error("curate requires a patch file.");
@@ -237,7 +263,7 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
       case "grep": {
         const parsed = parseArguments(
           rest,
-          new Set(["--in", "--limit", "--context-lines", "--max-source-characters", "--max-hits-per-group"]),
+          new Set(["--in", "--kinds", "--limit", "--context-lines", "--max-source-characters", "--max-hits-per-group"]),
         );
         const pattern = parsed.positionals[0];
         if (pattern === undefined) throw new Error("grep requires a pattern.");
@@ -246,6 +272,9 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
           ignoreCase: parsed.flags.has("--ignore-case") || parsed.flags.has("-i"),
           ...(parsed.options.has("--in")
             ? { pathPrefix: parsed.options.get("--in") as string }
+            : {}),
+          ...(parsed.options.has("--kinds")
+            ? { symbolKinds: (parsed.options.get("--kinds") as string).split(",").map((kind) => kind.trim()).filter(Boolean) }
             : {}),
           limit: positiveInteger(parsed.options.get("--limit"), 2_000, "--limit"),
           refresh: parsed.flags.has("--refresh"),
@@ -421,6 +450,16 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
               `${source.path}:L${source.context.startLine}-L${source.context.endLine}`,
             );
             io.out(source.context.text);
+          }
+          for (const source of result.calleeCruxes) {
+            io.out(
+              `callee ${source.path}:L${source.context.startLine}-L${source.context.endLine}`,
+            );
+            io.out(source.context.text);
+          }
+          for (const hit of result.curatedNodes) {
+            io.out(`${hit.node.id} · ${hit.node.kind} · ${hit.node.name}`);
+            io.out(hit.node.summary);
           }
         }
         return 0;

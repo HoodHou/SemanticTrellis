@@ -41,6 +41,15 @@ const IMPORT_TARGET_KINDS = new Set<StructuralSymbol["kind"]>([
   "enum",
   "delegate",
 ]);
+const CROSS_LAYER_TARGET_KINDS = new Set<StructuralSymbol["kind"]>([
+  "file",
+  "module",
+  "heading",
+  "table",
+  "sheet",
+  "field",
+  "variable",
+]);
 
 function add(map: Map<string, StructuralSymbol[]>, key: string, symbol: StructuralSymbol): void {
   const values = map.get(key) ?? [];
@@ -61,6 +70,8 @@ function validTarget(reference: StructuralReference, symbol: StructuralSymbol): 
       return TYPE_TARGET_KINDS.has(symbol.kind);
     case "import":
       return IMPORT_TARGET_KINDS.has(symbol.kind);
+    case "references":
+      return CROSS_LAYER_TARGET_KINDS.has(symbol.kind);
   }
 }
 
@@ -172,6 +183,53 @@ function moduleCandidates(sourcePath: string, target: string): string[] {
   ];
 }
 
+function headingSlug(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function resolveCrossLayerTarget(
+  reference: StructuralReference,
+  contributions: Record<string, FileContribution>,
+  byName: Map<string, StructuralSymbol[]>,
+  byQualifiedName: Map<string, StructuralSymbol[]>,
+): Selection {
+  const raw = reference.targetName.replace(/\\/g, "/");
+  const hashIndex = raw.indexOf("#");
+  const pathPart = (hashIndex >= 0 ? raw.slice(0, hashIndex) : raw).replace(/^\.\/+/, "");
+  const anchor = hashIndex >= 0 ? raw.slice(hashIndex + 1) : "";
+  if (pathPart.length > 0 && contributions[pathPart] !== undefined) {
+    const contribution = contributions[pathPart];
+    if (anchor.length > 0 && contribution !== undefined) {
+      const slug = headingSlug(anchor);
+      const headings = contribution.symbols.filter((symbol) =>
+        symbol.kind === "heading" &&
+        (symbol.name === anchor ||
+          symbol.qualifiedName === anchor ||
+          headingSlug(symbol.name) === slug),
+      );
+      if (headings.length === 1) return { target: headings[0] ?? null, ambiguous: false };
+      if (headings.length > 1) return { target: null, ambiguous: true };
+    }
+    const file = contribution?.symbols.find((symbol) => symbol.kind === "file") ?? null;
+    return { target: file, ambiguous: false };
+  }
+  const named = (byName.get(raw) ?? []).filter((symbol) =>
+    CROSS_LAYER_TARGET_KINDS.has(symbol.kind) && symbol.kind !== "file",
+  );
+  if (named.length === 1) return { target: named[0] ?? null, ambiguous: false };
+  if (named.length > 1) return { target: null, ambiguous: true };
+  const qualified = (byQualifiedName.get(raw) ?? []).filter((symbol) =>
+    CROSS_LAYER_TARGET_KINDS.has(symbol.kind),
+  );
+  if (qualified.length === 1) return { target: qualified[0] ?? null, ambiguous: false };
+  if (qualified.length > 1) return { target: null, ambiguous: true };
+  return { target: null, ambiguous: false };
+}
+
 function resolveImport(
   reference: StructuralReference,
   contributions: Record<string, FileContribution>,
@@ -231,10 +289,19 @@ export function resolveStructuralGraph(
     for (const reference of contribution.references) {
       let target: StructuralSymbol | null = null;
       let ambiguous = false;
-      if (reference.kind === "import") {
+      if (reference.kind === "references") {
+        const selected = resolveCrossLayerTarget(
+          reference,
+          contributions,
+          byName,
+          byQualifiedName,
+        );
+        target = selected.target;
+        ambiguous = selected.ambiguous;
+      } else if (reference.kind === "import") {
         target = resolveImport(reference, contributions);
       }
-      if (target === null && reference.targetQualifier !== null) {
+      if (reference.kind !== "references" && target === null && reference.targetQualifier !== null) {
         const qualifiedCandidates = byQualifiedName.get(reference.targetQualifier) ?? [];
         const localExact = selectUnique(
           reference,
@@ -259,12 +326,12 @@ export function resolveStructuralGraph(
         qualifier !== reference.targetName &&
         qualifier.includes(".") &&
         !explicitlyScoped;
-      if (target === null && !hasUnknownReceiver) {
+      if (reference.kind !== "references" && target === null && !hasUnknownReceiver) {
         const scoped = scopedTarget(reference, byId, byQualifiedName);
         target = scoped.target;
         ambiguous ||= scoped.ambiguous;
       }
-      if (target === null && !hasUnknownReceiver) {
+      if (reference.kind !== "references" && target === null && !hasUnknownReceiver) {
         const named = selectUnique(reference, byName.get(reference.targetName) ?? []);
         target = named.target;
         ambiguous ||= named.ambiguous;

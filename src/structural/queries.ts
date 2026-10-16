@@ -233,6 +233,56 @@ export function searchStructuralSymbols(
     .slice(0, Math.max(1, Math.floor(limit)));
 }
 
+function isTestPath(path: string): boolean {
+  return /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|\.(?:test|spec)\./.test(path);
+}
+
+function isSyntheticTestCallback(symbol: StructuralSymbol): boolean {
+  return symbol.kind === "callback" &&
+    /^(?:it|test|describe|beforeEach|afterEach|beforeAll|afterAll)\b/.test(symbol.name);
+}
+
+export function selectCalleeCruxSymbols(
+  index: StructuralIndex,
+  hits: readonly StructuralSymbolSearchHit[],
+  query: string,
+  limit = 2,
+): StructuralSymbol[] {
+  const selected = new Set(hits.map((hit) => hit.symbol.id));
+  const byId = symbolsById(index);
+  const inDegree = new Map<string, number>();
+  const outgoing = new Map<string, StructuralEdge[]>();
+  for (const edge of index.edges) {
+    inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
+    if (edge.kind !== "call" && edge.kind !== "invoke" && edge.kind !== "construct") continue;
+    const values = outgoing.get(edge.from) ?? [];
+    values.push(edge);
+    outgoing.set(edge.from, values);
+  }
+  const terms = [...new Set(normalizedWords(query.trim().toLowerCase()).map(normalizedSearchTerm))];
+  const testIntent = terms.some((term) => TEST_INTENT_TERMS.has(term));
+  const ranked: Array<{ symbol: StructuralSymbol; score: number }> = [];
+  const seen = new Set<string>();
+  hits.forEach((hit, hitIndex) => {
+    for (const edge of outgoing.get(hit.symbol.id) ?? []) {
+      const symbol = byId.get(edge.to);
+      if (symbol === undefined || selected.has(symbol.id) || seen.has(symbol.id)) continue;
+      if (symbol.kind === "file") continue;
+      if (!testIntent && (isTestPath(symbol.path) || isSyntheticTestCallback(symbol))) continue;
+      seen.add(symbol.id);
+      const haystack = `${symbol.name} ${symbol.qualifiedName} ${symbol.signature}`.toLowerCase();
+      const overlap = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+      const scarcity = 1 / (1 + (inDegree.get(symbol.id) ?? 0));
+      const relevance = (hits.length - hitIndex) + overlap * 2;
+      ranked.push({ symbol, score: relevance * (0.5 + scarcity) });
+    }
+  });
+  return ranked
+    .sort((left, right) => right.score - left.score || left.symbol.id.localeCompare(right.symbol.id))
+    .slice(0, Math.max(0, Math.floor(limit)))
+    .map((item) => item.symbol);
+}
+
 export function traceStructuralGraph(
   index: StructuralIndex,
   query: string,

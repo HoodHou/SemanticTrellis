@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.10.0 - 2026-10-16
+
+### Added
+
+- Structural review deltas on sync items: implementation-only,
+  symbol-signature-changed, cross-node-reference-changed, and file-moved.
+- `review_context` returns changed symbols, cross-file reference deltas,
+  affected curated nodes, and a candidate patch for pure moves and
+  implementation-only edits.
+- Ask attaches up to two direct callee cruxes and up to two curated-node
+  summaries inside the source budget.
+- Grep `symbolKinds` filtering, with test paths and synthetic test callbacks
+  ranked below production symbols.
+- Token-split inverse-document-frequency scoring for curated-graph search.
+- Markdown heading, table, and link extraction, plus `.strellis.json` sheet,
+  field, and row-id extraction.
+- `references` edges from Markdown links and from code literals that uniquely
+  name a document or projection symbol.
+- A single-chunk bootstrap fast path that returns source and structural
+  symbols together and accepts one file summary for both coverages.
+
+### Changed
+
+- Disposable structural cache schema is version 8. Older local indexes are
+  discarded and rebuilt.
+- Sync refreshes structural contributions before writing the review queue.
+
 ## 0.9.0 - 2026-09-01
 
 ### Added

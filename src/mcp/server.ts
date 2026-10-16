@@ -13,6 +13,7 @@ import {
   getNextBootstrapRollups,
   getNextBootstrapSourceBatch,
   getProjectionStatus,
+  buildReviewContext,
   grepStructure,
   listUnsupportedArtifacts,
   previewAgentBootstrap,
@@ -28,6 +29,7 @@ import {
   validateCurationPatch,
 } from "../application/index.js";
 import { graphNeighborhood, searchGraph } from "../domain/query.js";
+import { STRUCTURAL_SYMBOL_KINDS } from "../domain/structural.js";
 import { loadGraph, loadReviewQueue } from "../infrastructure/project-store.js";
 import { VERSION } from "../version.js";
 import {
@@ -45,6 +47,7 @@ import {
   projectionRegistrationOutputSchema,
   projectionStatusOutputSchema,
   projectionValidationOutputSchema,
+  reviewContextOutputSchema,
   reviewQueueOutputSchema,
   searchOutputSchema,
   statusOutputSchema,
@@ -59,8 +62,9 @@ import {
 } from "./schemas.js";
 
 const INSTRUCTIONS = [
-  "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use ask for one-call natural-language discovery with bounded source bodies, symbol_search for ranked metadata, and grep/trace for exact or exhaustive answers.",
-  "For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start, then repeat next_batch -> submit_chunk_summaries and next_rollups -> submit_file_summaries until ready for curation. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.",
+  "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use ask for one-call natural-language discovery with bounded source bodies, up to two callee cruxes, and matching curated-node summaries. Use symbol_search for ranked metadata, and grep/trace for exact or exhaustive answers.",
+  "For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start. When next_batch sets fastPath, submit that file summary directly; it records the single chunk and the file together. Multi-chunk files still use submit_chunk_summaries and then next_rollups. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.",
+  "After sync, call review_context. It classifies each pending file and returns one candidate patch for implementation-only edits and pure file moves. Validate and apply that patch only after user approval.",
   "Unsupported artifact projection rule: call unsupported_list or inspect bootstrap_preview instead of assuming the eligible-text manifest covers every repository artifact. Never ignore a relevant unsupported artifact, decode binary bytes as text, or invent a summary. After explicit approval to read it, use an available format-aware tool to construct a deterministic .strellis.json or .strellis.md projection bound to the reported source path and SHA-256, with media type, tool and version, preserved structure, omissions, and warnings. Call projection_validate, present its exact target and effects for approval, then call projection_register with the unchanged document and token. Never write or overwrite a projection directly. Regenerate only stale projections, restart bootstrap after registration, and report a blocker when approval or a capable tool is unavailable.",
 ].join(" ");
 
@@ -283,7 +287,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Next Source Review Batch",
       description:
-        "Return the next unsummarized frozen source chunks for AI review. Source content is returned only when bootstrap_start recorded explicit disclosure approval.",
+        "Return the next unsummarized frozen source chunks for AI review. Single-chunk files set fastPath and include structural symbols so one file summary can satisfy both chunk and file coverage. Source content is returned only when bootstrap_start recorded explicit disclosure approval.",
       inputSchema: z.object({
         maxCharacters: z.number().int().min(1_000).max(200_000).default(48_000),
         maxUnits: z.number().int().min(1).max(50).default(12),
@@ -343,7 +347,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Submit AI File Summaries",
       description:
-        "Checkpoint file-level semantic summaries after every chunk for each file has been reviewed.",
+        "Checkpoint file-level semantic summaries. A single-chunk file can be submitted before its chunk summary; the server derives that chunk summary from the file summary. Multi-chunk files still require every chunk summary first.",
       inputSchema: z.object({
         sessionId: z.string().length(64),
         summaries: z.array(fileSemanticSummarySchema).min(1).max(25),
@@ -500,6 +504,29 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
   );
 
   server.registerTool(
+    "semantic_trellis_review_context",
+    {
+      title: "Read Incremental Review Context",
+      description:
+        "Build a compact review package for the pending queue: structural change class, changed symbols, cross-file reference deltas, affected curated-node summaries, and a candidate patch that marks implementation-only edits and pure file moves reviewed.",
+      inputSchema: z.object({
+        pathPrefix: z.string().optional(),
+        limit: z.number().int().min(1).max(500).default(100),
+      }),
+      outputSchema: reviewContextOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ pathPrefix, limit }) =>
+      safe(async () => ({
+        ...(await buildReviewContext(root, pathPrefix, limit)),
+      })),
+  );
+
+  server.registerTool(
     "semantic_trellis_audit",
     {
       title: "Audit Curated Graph",
@@ -573,12 +600,13 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Symbol-Aware Structural Grep",
       description:
-        "Search indexed source exhaustively, repair stale contributions once, group matches by symbol importance, and optionally return bounded source context or symbol bodies.",
+        "Search indexed source exhaustively, repair stale contributions once, group matches by symbol importance, deprioritize tests and synthetic callbacks, and optionally filter by symbol kind or return bounded source context.",
       inputSchema: z.object({
         pattern: z.string().min(1),
         fixed: z.boolean().default(true),
         ignoreCase: z.boolean().default(false),
         pathPrefix: z.string().optional(),
+        symbolKinds: z.array(z.enum(STRUCTURAL_SYMBOL_KINDS)).optional(),
         limit: z.number().int().min(1).max(5_000).default(2_000),
         maxHitsPerGroup: z.number().int().min(1).max(500).default(50),
         contextLines: z.number().int().min(0).max(20).default(0),
@@ -597,6 +625,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
       fixed,
       ignoreCase,
       pathPrefix,
+      symbolKinds,
       limit,
       maxHitsPerGroup,
       contextLines,
@@ -608,6 +637,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
           fixed,
           ignoreCase,
           ...(pathPrefix === undefined ? {} : { pathPrefix }),
+          ...(symbolKinds === undefined ? {} : { symbolKinds }),
           limit,
           maxHitsPerGroup,
           contextLines,
@@ -713,7 +743,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Ask About Repository Code",
       description:
-        "Answer a natural-language repository question with ranked symbols, curated attribution, and bounded verified source bodies in one call.",
+        "Answer a natural-language repository question with ranked symbols, bounded verified source bodies, up to two 1-hop callee cruxes, and up to two matching curated-node summaries.",
       inputSchema: z.object({
         query: z.string().min(1),
         limit: z.number().int().min(1).max(50).default(4),

@@ -101,6 +101,39 @@ export type ReviewReason =
   | "source-changed"
   | "source-removed";
 
+export type StructuralReviewNature =
+  | "implementation-only"
+  | "symbol-signature-changed"
+  | "cross-node-reference-changed"
+  | "file-moved"
+  | "source-added"
+  | "source-removed";
+
+export interface ReviewSymbolChange {
+  change: "added" | "removed" | "signature-changed";
+  name: string;
+  qualifiedName: string;
+  kind: string;
+  beforeSignature: string | null;
+  afterSignature: string | null;
+}
+
+export interface ReviewReferenceChange {
+  change: "added" | "removed";
+  kind: string;
+  ownerQualifiedName: string;
+  targetName: string;
+  targetPath: string | null;
+}
+
+export interface ReviewStructuralDelta {
+  nature: StructuralReviewNature;
+  movedFrom: string | null;
+  movedTo: string | null;
+  symbolChanges: ReviewSymbolChange[];
+  referenceChanges: ReviewReferenceChange[];
+}
+
 export interface ReviewItem {
   id: string;
   path: string;
@@ -109,6 +142,7 @@ export interface ReviewItem {
   beforeHash: string | null;
   afterHash: string | null;
   relatedNodeIds: string[];
+  structuralDelta: ReviewStructuralDelta | null;
 }
 
 export interface ReviewQueue {

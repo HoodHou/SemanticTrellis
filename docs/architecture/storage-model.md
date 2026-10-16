@@ -37,7 +37,10 @@ optimization and can be rebuilt.
 ### `.semantic-trellis/local/review-queue.json`
 
 Pending bootstrap and maintenance work. It records which files changed, why
-they require review, and which curated nodes may be affected. Entries selected
+they require review, which curated nodes may be affected, and an optional
+structural delta. The delta names the change class, moved paths, symbol
+signature changes, and cross-file reference changes. Entries created before
+that field existed are read with a null delta. Entries selected
 by `mark-reviewed` participate in the curation validation token so a newer delta
 for the same path cannot be cleared by an older approval.
 
@@ -52,8 +55,9 @@ Python and Lua dynamic calls use the `invoke` relation.
 The index also stores repository revision/untracked state, per-file resolution
 metrics, and target-name reverse references for incremental edge repair. An
 unchanged file reuses its contribution without parsing. The
-current structural cache schema is version 7; older local indexes are discarded
-and rebuilt.
+current structural cache schema is version 8; older local indexes are discarded
+and rebuilt. Version 8 adds heading, table, and sheet symbols plus `references`
+edges for Markdown links and code-to-document or code-to-projection mentions.
 
 ### `.semantic-trellis/local/agent-bootstrap.json`
 

@@ -12,5 +12,6 @@ export interface LanguageAdapter {
   id: string;
   version: string;
   extensions: ReadonlySet<string>;
+  matches?(path: string): boolean;
   extract(input: LanguageExtractionInput): FileContribution;
 }

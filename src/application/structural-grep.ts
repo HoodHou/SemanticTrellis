@@ -1,10 +1,12 @@
 import { performance } from "node:perf_hooks";
-import type {
-  SourceContext,
-  StructuralBuildResult,
-  StructuralGrepGroup,
-  StructuralGrepResult,
-  StructuralSymbol,
+import {
+  STRUCTURAL_SYMBOL_KINDS,
+  type SourceContext,
+  type StructuralBuildResult,
+  type StructuralGrepGroup,
+  type StructuralGrepResult,
+  type StructuralSymbol,
+  type StructuralSymbolKind,
 } from "../domain/structural.js";
 import { loadGraph } from "../infrastructure/project-store.js";
 import {
@@ -17,6 +19,7 @@ export interface StructuralGrepOptions {
   fixed?: boolean;
   ignoreCase?: boolean;
   pathPrefix?: string;
+  symbolKinds?: readonly string[];
   limit?: number;
   refresh?: boolean;
   repairStale?: boolean;
@@ -48,6 +51,34 @@ function normalizePrefix(value: string | undefined): string | null {
 
 function underPrefix(path: string, prefix: string | null): boolean {
   return prefix === null || path === prefix || path.startsWith(`${prefix}/`);
+}
+
+function symbolKindFilter(values: readonly string[] | undefined): Set<StructuralSymbolKind> | null {
+  if (values === undefined || values.length === 0) return null;
+  const accepted = new Set<string>(STRUCTURAL_SYMBOL_KINDS);
+  const kinds = new Set<StructuralSymbolKind>();
+  for (const value of values) {
+    const kind = value.trim();
+    if (!accepted.has(kind)) throw new Error(`Unknown symbol kind: ${kind}`);
+    kinds.add(kind as StructuralSymbolKind);
+  }
+  return kinds;
+}
+
+function isTestPath(path: string): boolean {
+  return /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)|\.(?:test|spec)\./i.test(path.replace(/\\/g, "/"));
+}
+
+function isSyntheticTestCallback(group: StructuralGrepGroup): boolean {
+  return group.symbolKind === "callback" &&
+    /^(?:it|test|describe|beforeEach|afterEach|beforeAll|afterAll)\b/.test(group.symbolName);
+}
+
+function grepRank(group: StructuralGrepGroup): number {
+  let score = group.inDegree * 1_000 + group.totalHits;
+  if (isTestPath(group.path)) score *= 0.25;
+  if (isSyntheticTestCallback(group)) score *= 0.2;
+  return score;
 }
 
 function containingSymbol(symbols: StructuralSymbol[], line: number): StructuralSymbol {
@@ -116,6 +147,7 @@ async function grepBuiltIndex(
   const fixed = options.fixed ?? true;
   const ignoreCase = options.ignoreCase ?? false;
   const prefix = normalizePrefix(options.pathPrefix);
+  const kinds = symbolKindFilter(options.symbolKinds);
   const limit = Math.max(1, Math.floor(options.limit ?? 2_000));
   const maxHitsPerGroup = Math.max(1, Math.min(limit, Math.floor(options.maxHitsPerGroup ?? 50)));
   const contextLines = Math.max(0, Math.min(20, Math.floor(options.contextLines ?? 0)));
@@ -163,8 +195,12 @@ async function grepBuiltIndex(
       expression.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = expression.exec(text)) !== null) {
-        totalHits += 1;
         const symbol = containingSymbol(contribution.symbols, lineIndex + 1);
+        if (kinds !== null && !kinds.has(symbol.kind)) {
+          if (match[0] === "") expression.lastIndex += 1;
+          continue;
+        }
+        totalHits += 1;
         if (symbol.kind !== "file") symbolAttributed += 1;
         if (curatedNodeIds.length > 0) curatedAttributed += 1;
         const existing = groups.get(symbol.id) ?? {
@@ -195,6 +231,7 @@ async function grepBuiltIndex(
 
   const ranked = [...groups.values()].sort(
     (left, right) =>
+      grepRank(right) - grepRank(left) ||
       right.inDegree - left.inDegree ||
       right.totalHits - left.totalHits ||
       left.path.localeCompare(right.path),

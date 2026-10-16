@@ -44,6 +44,7 @@ describe("MCP server", () => {
           "semantic_trellis_graph",
           "semantic_trellis_search",
           "semantic_trellis_review_queue",
+          "semantic_trellis_review_context",
           "semantic_trellis_audit",
           "semantic_trellis_sync",
           "semantic_trellis_structure",

@@ -37,7 +37,10 @@ with its prebuilt Tree-sitter C# grammar. Python uses the same runtime with a
 prebuilt Tree-sitter Python grammar and represents dynamically ambiguous calls
 as conservative `invoke` references. Lua uses a prebuilt Tree-sitter Lua grammar
 and models module tables, callbacks, `require` imports, and dynamic invocation in
-the same contribution format. Other languages plug into the same registry.
+the same contribution format. Markdown contributes heading, table, and relative
+link facts. `.strellis.json` projections contribute sheet, field, and row-id
+facts. Code literals that uniquely name those facts become `references` edges.
+Other languages plug into the same registry.
 
 ### Artifact projections
 
@@ -70,9 +73,11 @@ refresh skips edge resolution and index persistence entirely.
 Read queries use the cached in-process index, probe Git deltas or source stats,
 and repair stale contributions once before retrying. Source reads are verified
 and cached by content hash, with byte-order-mark-aware decoding. Natural-language
-`ask` retrieval combines ranked symbols and bounded verified source bodies in
-one call. This keeps MCP and CLI behavior consistent while preserving exact
-stale-source detection.
+`ask` retrieval combines ranked symbols, bounded verified source bodies, up to
+two direct callee cruxes, and the best matching curated-node summaries in one
+call. Symbol search and curated-graph search both weight split terms by inverse
+document frequency. This keeps MCP and CLI behavior consistent while preserving
+exact stale-source detection.
 
 ### Curator proposals
 
@@ -101,8 +106,10 @@ more stable than the symbol graph.
 5. Freeze and hash the complete eligible-text repository snapshot.
 6. Split every eligible text file and registered projection into stable source chunks.
 7. Let the connected Agent summarize every chunk with resumable checkpoints.
+   A file that is already a single chunk can submit its file summary directly;
+   that submission also records the chunk summary.
 8. Roll chunk summaries and structural evidence into one semantic summary per
-   file.
+   file. Single-chunk files skip the separate rollup round trip.
 9. Page the complete summary corpus to the Curator Agent.
 10. Review and apply its sourced graph proposal as an explicit patch.
 11. Mark the session complete only at 100% coverage, clean projection status,
@@ -112,10 +119,12 @@ more stable than the symbol graph.
 
 1. Probe repository state.
 2. Compute the delta against the local snapshot.
-3. Find curated nodes whose provenance intersects the delta.
-4. Create or update review items.
-5. Update disposable structural state.
-6. Leave the approved graph unchanged until a patch is reviewed.
+3. Refresh disposable structural state and compare the previous and next
+   contributions for each changed path.
+4. Classify each review item as implementation-only, symbol-signature-changed,
+   cross-node-reference-changed, file-moved, source-added, or source-removed.
+5. Find curated nodes whose provenance intersects the delta.
+6. Create or update review items without changing the approved graph.
 
 ### Audit
 
