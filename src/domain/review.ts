@@ -348,6 +348,31 @@ export function markReviewed(queue: ReviewQueue, paths: string[]): ReviewQueue {
   };
 }
 
+const DRAFT_NATURES = new Set<ReviewStructuralDelta["nature"]>([
+  "symbol-signature-changed",
+  "cross-node-reference-changed",
+  "source-added",
+  "source-removed",
+]);
+
+export function reviewImpactPaths(item: ReviewItem): string[] {
+  const paths = new Set<string>([item.path]);
+  const delta = item.structuralDelta;
+  if (delta?.movedFrom) paths.add(delta.movedFrom);
+  if (delta?.movedTo) paths.add(delta.movedTo);
+  for (const change of delta?.referenceChanges ?? []) {
+    if (change.targetPath) paths.add(change.targetPath);
+  }
+  return [...paths].sort();
+}
+
+export function meaningfulReviewCount(items: readonly ReviewItem[]): number {
+  return items.filter((item) => {
+    const nature = item.structuralDelta?.nature;
+    return nature !== "implementation-only" && nature !== "file-moved";
+  }).length;
+}
+
 function withMovedSource(node: SemanticNode, from: string, to: string): SemanticNode {
   return {
     ...node,
@@ -393,4 +418,31 @@ export function reviewCandidatePatch(
   }
   if (operations.length === 0) return null;
   return { schemaVersion: SCHEMA_VERSION, operations };
+}
+
+export function reviewDraftPatch(
+  items: ReviewItem[],
+  graph: CuratedGraph,
+): GraphPatch | null {
+  const rewritten = new Map<string, SemanticNode>();
+  for (const operation of reviewCandidatePatch(items, graph)?.operations ?? []) {
+    if (operation.op === "upsert-node") rewritten.set(operation.node.id, operation.node);
+  }
+  const paths = new Set<string>();
+  for (const item of items) {
+    const nature = item.structuralDelta?.nature;
+    if (nature === undefined || !DRAFT_NATURES.has(nature)) continue;
+    for (const path of reviewImpactPaths(item)) paths.add(path);
+  }
+  const nodes = graph.nodes
+    .filter((node) => node.sources.some((source) => paths.has(source.path)))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  if (nodes.length === 0) return null;
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    operations: nodes.map((node) => ({
+      op: "upsert-node" as const,
+      node: structuredClone(rewritten.get(node.id) ?? node),
+    })),
+  };
 }

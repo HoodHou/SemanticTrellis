@@ -35,7 +35,8 @@
 - [x] Define deterministic `.strellis.json` and `.strellis.md` projections.
 - [x] Guard projection writes with source/content/target validation tokens.
 - [x] Detect stale projections with changed-file-only hash refresh.
-- Add Markdown heading, table, front-matter, and link contributions.
+- [x] Add Markdown heading, table, and link contributions.
+- Add Markdown front-matter contributions.
 - Add native workbook extraction and code-to-configuration relationships.
 
 ## Milestone 3 - Curator workflow
@@ -47,11 +48,14 @@
 
 ## Milestone 4 - Incremental semantic maintenance
 
-- Map structural deltas to curated impact sets.
-- Generate small semantic patches only for affected nodes.
-- Auto-apply mechanical provenance updates.
-- Require review for classification, deletion, and cross-system edges.
-- Add configurable full-audit triggers.
+- [x] Map structural deltas to curated impact sets, including both sides of a
+  cross-file reference change.
+- [x] Generate small semantic draft patches only for affected nodes.
+- [x] Prefill mechanical provenance updates for validate-token-apply. Do not
+  write them without a validation token.
+- [x] Require review for classification, deletion, and cross-system edges.
+- [x] Add configurable full-audit triggers based on changes that need semantic
+  judgment.
 
 ## Milestone 5 - Agent integrations
 

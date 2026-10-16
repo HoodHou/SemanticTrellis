@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.3 - 2026-10-16
+
+### Added
+
+- `review_context` returns a `draftPatch` that clones curated nodes affected
+  by signature changes, cross-file reference changes, additions, and removals.
+  The draft does not mark those paths reviewed.
+- Cross-file reference changes include curated nodes from both files.
+
+### Changed
+
+- Full-audit recommendation counts only changes that need semantic judgment.
+  Implementation-only edits and pure file moves stay below the threshold.
+
 ## 0.10.2 - 2026-10-16
 
 ### Changed

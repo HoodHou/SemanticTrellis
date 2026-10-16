@@ -1,4 +1,4 @@
-import { createReviewItems, mergeReviewQueue } from "../domain/review.js";
+import { createReviewItems, meaningfulReviewCount, mergeReviewQueue } from "../domain/review.js";
 import { createSnapshot, diffSnapshots } from "../domain/snapshot.js";
 import type { FileChangeKind } from "../domain/model.js";
 import { scanRepository } from "../infrastructure/repository-scanner.js";
@@ -38,10 +38,8 @@ export async function syncProject(root: string): Promise<SyncResult> {
     ? previousStructure
     : (await buildStructuralIndex(root)).index;
   const currentQueue = await loadReviewQueue(root);
-  const queue = mergeReviewQueue(
-    currentQueue,
-    createReviewItems(changes, graph, previousStructure, nextStructure),
-  );
+  const incoming = createReviewItems(changes, graph, previousStructure, nextStructure);
+  const queue = mergeReviewQueue(currentQueue, incoming);
 
   await saveReviewQueue(root, queue);
   await saveSnapshot(root, current);
@@ -55,6 +53,6 @@ export async function syncProject(root: string): Promise<SyncResult> {
     changes: changes.length,
     byKind,
     pendingReviews: queue.items.length,
-    fullAuditRecommended: changes.length / baseline >= config.maintenance.fullAuditChangeRatio,
+    fullAuditRecommended: meaningfulReviewCount(incoming) / baseline >= config.maintenance.fullAuditChangeRatio,
   };
 }

@@ -1,6 +1,6 @@
 {
   "name": "semantic-trellis",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "private": true,
   "description": "A curated semantic graph that learns a codebase once and maintains only its deltas.",
   "type": "module",

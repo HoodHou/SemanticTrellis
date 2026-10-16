@@ -38,7 +38,9 @@ optimization and can be rebuilt.
 
 Pending bootstrap and maintenance work. It records which files changed, why
 they require review, which curated nodes may be affected, and an optional
-structural delta. The delta names the change class, moved paths, symbol
+structural delta. `review_context` can turn implementation-only edits and pure
+moves into a candidate patch, and other structural deltas into a draft patch
+that still requires validate-token-apply. The delta names the change class, moved paths, symbol
 signature changes, and cross-file reference changes. Entries created before
 that field existed are read with a null delta. Entries selected
 by `mark-reviewed` participate in the curation validation token so a newer delta

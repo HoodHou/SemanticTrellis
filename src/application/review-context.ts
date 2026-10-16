@@ -1,4 +1,4 @@
-import { reviewCandidatePatch } from "../domain/review.js";
+import { reviewCandidatePatch, reviewDraftPatch, reviewImpactPaths } from "../domain/review.js";
 import type {
   GraphPatch,
   ReviewItem,
@@ -32,6 +32,7 @@ export interface ReviewContext {
   unclassified: number;
   items: ReviewContextItem[];
   candidatePatch: GraphPatch | null;
+  draftPatch: GraphPatch | null;
 }
 
 function normalizePrefix(value: string | undefined): string | null {
@@ -58,15 +59,10 @@ export async function buildReviewContext(
   const selected = matching.slice(0, Math.max(1, Math.min(500, Math.floor(limit))));
   const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
   const items = selected.map((item) => {
+    const impact = new Set(reviewImpactPaths(item));
     const ids = new Set(item.relatedNodeIds);
-    const movedFrom = item.structuralDelta?.movedFrom;
-    const movedTo = item.structuralDelta?.movedTo;
     for (const node of graph.nodes) {
-      if (node.sources.some((source) =>
-        source.path === item.path || source.path === movedFrom || source.path === movedTo,
-      )) {
-        ids.add(node.id);
-      }
+      if (node.sources.some((source) => impact.has(source.path))) ids.add(node.id);
     }
     return {
       id: item.id,
@@ -95,5 +91,6 @@ export async function buildReviewContext(
     unclassified,
     items,
     candidatePatch: reviewCandidatePatch(matching, graph),
+    draftPatch: reviewDraftPatch(matching, graph),
   };
 }

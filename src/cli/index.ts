@@ -204,6 +204,10 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
           io.out("Candidate patch:");
           io.out(JSON.stringify(result.candidatePatch, null, 2));
         }
+        if (result.draftPatch !== null) {
+          io.out("Draft patch:");
+          io.out(JSON.stringify(result.draftPatch, null, 2));
+        }
         return 0;
       }
       case "curate": {

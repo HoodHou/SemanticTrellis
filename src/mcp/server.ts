@@ -508,7 +508,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Incremental Review Context",
       description:
-        "Build a compact review package for pending structural deltas: change class, changed symbols, cross-file reference deltas, affected curated-node summaries, and a candidate patch for implementation-only edits and pure file moves. Unclassified bootstrap items stay out unless includeUnclassified is set.",
+        "Build a compact review package for pending structural deltas. candidatePatch is safe to validate for implementation-only edits and pure file moves. draftPatch clones affected nodes for signature, reference, add, and remove changes and does not mark them reviewed.",
       inputSchema: z.object({
         pathPrefix: z.string().optional(),
         limit: z.number().int().min(1).max(500).default(100),

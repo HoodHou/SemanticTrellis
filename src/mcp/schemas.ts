@@ -166,6 +166,7 @@ export const reviewContextOutputSchema = z.object({
     })),
   })),
   candidatePatch: graphPatchSchema.nullable(),
+  draftPatch: graphPatchSchema.nullable(),
 });
 
 export const reviewQueueOutputSchema = z.object({
