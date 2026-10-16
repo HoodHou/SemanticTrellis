@@ -6,7 +6,7 @@
       "id": "agent-ai-bootstrap",
       "name": "Agent AI Bootstrap",
       "kind": "subsystem",
-      "summary": "Runs the consent-gated, frozen, resumable full-repository Agent review, automatically discloses unsupported artifact inventory and projection health without binary content, blocks stale or invalid sidecars, checkpoints every eligible source chunk and file summary before an audit-clean curated graph can be accepted, and reuses unchanged semantic checkpoints across later deltas.",
+      "summary": "Resumable first review of every eligible file.",
       "sources": [
         {
           "path": "src/domain/agent-bootstrap.ts",
@@ -44,7 +44,7 @@
       "id": "application-workflows",
       "name": "Application Workflows",
       "kind": "subsystem",
-      "summary": "Coordinates initialization, bootstrap, curation, synchronization, audit, and status use cases, including optimistic concurrency over the canonical graph, exact patch, and selected review entries.",
+      "summary": "Coordinates init, bootstrap, sync, curate, audit, and status.",
       "sources": [
         {
           "path": "src/application/initialize.ts",
@@ -87,7 +87,7 @@
       "id": "architecture-governance",
       "name": "Architecture Governance",
       "kind": "invariant",
-      "summary": "Keeps architecture decisions, repository language, contribution rules, and the delivery roadmap explicit and reviewable.",
+      "summary": "Holds architecture decisions and the roadmap.",
       "sources": [
         {
           "path": "AGENTS.md",
@@ -117,7 +117,7 @@
       "id": "artifact-projection-pipeline",
       "name": "Agent-Assisted Artifact Projection Pipeline",
       "kind": "subsystem",
-      "summary": "Inventories every Git-visible artifact outside the eligible-text policy, validates deterministic source-bound JSON or Markdown projections, caches hashes and health locally, isolates stale sources incrementally, and registers sidecars through an exact source-content-target validation token without modifying originals.",
+      "summary": "Registers source-bound sidecars for unsupported artifacts.",
       "sources": [
         {
           "path": "src/domain/projection.ts",
@@ -161,7 +161,7 @@
       "id": "build-and-delivery-tooling",
       "name": "Build and Delivery Tooling",
       "kind": "component",
-      "summary": "Defines the Node.js package, version history, TypeScript compiler policy, dependency lock, and continuous integration workflow.",
+      "summary": "Owns the package, TypeScript build, and CI.",
       "sources": [
         {
           "path": "package.json",
@@ -196,7 +196,7 @@
       "id": "command-line-adapter",
       "name": "Command-Line Adapter",
       "kind": "component",
-      "summary": "Exposes the complete lifecycle and structural grep, symbols, trace, search, and ask workflows, with compact top-4 crux defaults, full-body opt-in, repair controls, and metrics.",
+      "summary": "CLI for lifecycle commands and structural queries.",
       "sources": [
         {
           "path": "src/cli/index.ts",
@@ -221,7 +221,7 @@
       "id": "curated-graph-domain",
       "name": "Curated Graph Domain",
       "kind": "subsystem",
-      "summary": "Defines stable semantic identities, graph queries, graph patch transactions, repository snapshots, review queues, and graph audit rules.",
+      "summary": "Stable graph identities, patches, snapshots, and audit rules.",
       "sources": [
         {
           "path": "src/domain/model.ts",
@@ -272,7 +272,7 @@
       "id": "curation-patch-contract",
       "name": "Curation Patch Contract",
       "kind": "concept",
-      "summary": "Defines the explicit review transaction and validation-token boundary used by humans, agents, and future visual tooling to modify the canonical graph without clearing newer same-path review work.",
+      "summary": "Graph writes require a validation token.",
       "sources": [
         {
           "path": "docs/curation-patches.md",
@@ -300,7 +300,7 @@
       "id": "language-extraction-adapters",
       "name": "Language Extraction Adapters",
       "kind": "component",
-      "summary": "Defines pinned Compiler API and Tree-sitter adapters that turn TypeScript, JavaScript, C#, Python, Python stubs, and Lua into cacheable contributions with stable scopes, references, call shape, diagnostics, callbacks, partial identity, imports, decorators, Lua module tables, require imports, and dynamic invokes.",
+      "summary": "TypeScript, JavaScript, C#, Python, and Lua extractors.",
       "sources": [
         {
           "path": "src/ports/language-adapter.ts",
@@ -368,7 +368,7 @@
       "id": "mcp-agent-adapter",
       "name": "MCP Agent Adapter",
       "kind": "subsystem",
-      "summary": "Exposes 27 fixed-repository Agent tools and three resources for AI bootstrap, unsupported artifact inventory, guarded projection validation and registration, compact ask retrieval, exact structural reads, review state, audits, and graph writes protected against changed source, content, target, graph, patch, or selected review entries.",
+      "summary": "MCP tools for read, review, and guarded graph writes.",
       "sources": [
         {
           "path": "src/mcp/server.ts",
@@ -408,7 +408,7 @@
       "id": "repository-infrastructure",
       "name": "Repository Infrastructure",
       "kind": "subsystem",
-      "summary": "Owns complete Git-visible artifact discovery, parallel stat collection, stat- and revision-assisted exact and streaming hashing, BOM and Python encoding-cookie decoding, exclusions, atomic JSON and UTF-8 persistence, graph, source, structural and projection caches, project layout, and disposable local-state boundaries.",
+      "summary": "Git discovery, hashing, caches, and JSON persistence.",
       "sources": [
         {
           "path": "src/infrastructure/repository-scanner.ts",
@@ -469,7 +469,7 @@
       "id": "semantic-provider-boundary",
       "name": "Semantic Provider Boundary",
       "kind": "component",
-      "summary": "Defines provider-neutral contracts for future AI bootstrap and incremental semantic maintenance adapters.",
+      "summary": "Ports for future summarizer and curator adapters.",
       "sources": [
         {
           "path": "src/ports/semantic-provider.ts",
@@ -492,7 +492,7 @@
       "id": "semantic-trellis-product",
       "name": "SemanticTrellis Product",
       "kind": "system",
-      "summary": "Turns one consented full-repository AI review into a durable curated semantic graph, makes unsupported artifacts visible and safely projectable without decoding binary bytes, then maintains repository understanding through bounded structural, projection, and semantic deltas instead of repeating the full review.",
+      "summary": "Maintains a curated graph from one full review and later deltas.",
       "sources": [
         {
           "path": "README.md",
@@ -516,7 +516,7 @@
       "id": "structural-index-engine",
       "name": "Structural Index Engine",
       "kind": "subsystem",
-      "summary": "Maintains cached mixed-language structural contributions, precise delta propagation, conservative call, construct, and dynamic invoke resolution, package-aware imports, Lua require paths and lexical module resolution, IDF ranking, exact grep and trace, and compact one-call ask retrieval.",
+      "summary": "Disposable symbols, references, grep, trace, and ask.",
       "sources": [
         {
           "path": "src/domain/structural.ts",
@@ -587,7 +587,7 @@
       "id": "verification-suite",
       "name": "Verification Suite",
       "kind": "component",
-      "summary": "Verifies lifecycle and graph integrity, TypeScript and C# extraction, Python and Lua declarations and packages, complete unsupported discovery, JSON and Markdown projection contracts, stale-token rejection, one-source invalidation, dynamic invokes, encoding, stable identities, incremental maintenance, ranking, concurrency, and the complete MCP workflow.",
+      "summary": "Tests for lifecycle, extraction, projections, and MCP.",
       "sources": [
         {
           "path": "test/agent-bootstrap.test.ts",
@@ -651,20 +651,7 @@
         }
       ],
       "tags": [
-        "test",
-        "verification",
-        "mcp",
-        "structural",
-        "csharp",
-        "python",
-        "lua",
-        "projection",
-        "ai-bootstrap",
-        "incremental",
-        "encoding",
-        "ask",
-        "concurrency",
-        "ranking"
+        "test"
       ],
       "status": "approved",
       "locked": false

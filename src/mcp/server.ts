@@ -62,10 +62,9 @@ import {
 } from "./schemas.js";
 
 const INSTRUCTIONS = [
-  "SemanticTrellis serves one fixed repository. Structural read tools repair ordinary source deltas automatically; use ask for one-call natural-language discovery with bounded source bodies, up to two callee cruxes, and matching curated-node summaries. Use symbol_search for ranked metadata, and grep/trace for exact or exhaustive answers.",
-  "For first AI bootstrap, call bootstrap_preview and show its disclosure manifest to the user. Only after explicit approval call bootstrap_start. When next_batch sets fastPath, submit that file summary directly; it records the single chunk and the file together. Multi-chunk files still use submit_chunk_summaries and then next_rollups. Page bootstrap_context, propose a sourced graph patch, validate it, obtain approval, apply it, then call bootstrap_complete. Never apply a patch without validation and user approval.",
-  "After sync, call review_context. It classifies each pending file and returns one candidate patch for implementation-only edits and pure file moves. Validate and apply that patch only after user approval.",
-  "Unsupported artifact projection rule: call unsupported_list or inspect bootstrap_preview instead of assuming the eligible-text manifest covers every repository artifact. Never ignore a relevant unsupported artifact, decode binary bytes as text, or invent a summary. After explicit approval to read it, use an available format-aware tool to construct a deterministic .strellis.json or .strellis.md projection bound to the reported source path and SHA-256, with media type, tool and version, preserved structure, omissions, and warnings. Call projection_validate, present its exact target and effects for approval, then call projection_register with the unchanged document and token. Never write or overwrite a projection directly. Regenerate only stale projections, restart bootstrap after registration, and report a blocker when approval or a capable tool is unavailable.",
+  "One fixed repository. Use ask to discover, grep or trace for an exact lookup, and review_context after sync.",
+  "Never apply a patch without validation and user approval.",
+  "Unsupported artifact projection rule: Never ignore a relevant unsupported artifact or decode it as text. After approval, bind a .strellis.json or .strellis.md sidecar, call projection_validate, then projection_register. Never write a projection directly.",
 ].join(" ");
 
 function success<T extends Record<string, unknown>>(value: T) {
@@ -123,7 +122,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Preview AI Bootstrap Disclosure",
       description:
-        "List the eligible files, bytes, extensions, largest files, suspicious paths, and up to 500 automatically discovered unsupported artifacts with projection state. Returns no source or binary content and changes no repository files.",
+        "List eligible files and unsupported artifacts. Returns no source or binary content.",
       inputSchema: z.object({}),
       outputSchema: agentBootstrapPreviewOutputSchema,
       annotations: {
@@ -140,10 +139,10 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Start or Resume Full AI Bootstrap",
       description:
-        "Freeze the current repository snapshot, refresh structural evidence, plan source chunks, and resume summaries for unchanged content. Requires explicit approval to disclose source chunks to the connected Agent model.",
+        "Freeze the snapshot and resume AI bootstrap. Requires explicit source-disclosure approval.",
       inputSchema: z.object({
         sourceDisclosureApproved: z.literal(true).describe(
-          "Must be true only after the user explicitly authorizes sending eligible repository text to the connected Agent model.",
+          "True only after the user approves source disclosure.",
         ),
         maxChunkCharacters: z.number().int().min(2_000).max(50_000).default(20_000),
       }),
@@ -169,7 +168,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "List Unsupported Repository Artifacts",
       description:
-        "Discover every Git-visible, non-excluded artifact outside the eligible text policy, hash it with stat-assisted reuse, and report projection state. Page with offset and limit for complete coverage.",
+        "Page unsupported artifacts and their projection state. No binary content.",
       inputSchema: z.object({
         offset: z.number().int().min(0).default(0),
         limit: z.number().int().min(1).max(500).default(100),
@@ -193,7 +192,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Artifact Projection Status",
       description:
-        "Refresh and report current, stale, invalid, unprojected, and orphaned projections with changed-file-only hash metrics.",
+        "Report projection health.",
       inputSchema: z.object({
         offset: z.number().int().min(0).default(0),
         limit: z.number().int().min(1).max(500).default(100),
@@ -217,7 +216,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Validate Artifact Projection",
       description:
-        "Validate and normalize a proposed .strellis.json or .strellis.md document without writing. Returns a token bound to the source hash, normalized projection, exact target, and current target contents.",
+        "Validate a projection without writing it. Returns a registration token.",
       inputSchema: z.object({
         projectionPath: z.string().min(1),
         content: z.string().min(1).max(1_500_000),
@@ -240,7 +239,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Register Validated Artifact Projection",
       description:
-        "Write the normalized projection sidecar at the source-bound path using the exact document and validation token. Rejects changed source, content, or target state and never modifies the original artifact.",
+        "Register a validated projection sidecar. Does not modify the original artifact.",
       inputSchema: z.object({
         projectionPath: z.string().min(1),
         content: z.string().min(1).max(1_500_000),
@@ -270,7 +269,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read AI Bootstrap Status",
       description:
-        "Return full-review coverage, resumability metrics, current bootstrap stage, and completion digest.",
+        "Return bootstrap coverage and stage.",
       inputSchema: z.object({}),
       outputSchema: agentBootstrapStatusSchema,
       annotations: {
@@ -287,7 +286,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Next Source Review Batch",
       description:
-        "Return the next unsummarized frozen source chunks for AI review. Single-chunk files set fastPath and include structural symbols so one file summary can satisfy both chunk and file coverage. Source content is returned only when bootstrap_start recorded explicit disclosure approval.",
+        "Return the next unsummarized source chunks. fastPath files include symbols and accept one file summary.",
       inputSchema: z.object({
         maxCharacters: z.number().int().min(1_000).max(200_000).default(48_000),
         maxUnits: z.number().int().min(1).max(50).default(12),
@@ -307,7 +306,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Submit AI Chunk Summaries",
       description:
-        "Checkpoint AI summaries for exact frozen source chunks. Repeating the same submission is idempotent.",
+        "Save chunk summaries for the frozen snapshot.",
       inputSchema: z.object({
         sessionId: z.string().length(64),
         summaries: z.array(chunkSummarySubmissionSchema).min(1).max(50),
@@ -331,7 +330,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Next File Rollup Batch",
       description:
-        "Return files whose chunks are fully summarized, together with chunk summaries and structural symbols, for AI file-level synthesis.",
+        "Return files ready for a file-level summary.",
       inputSchema: z.object({ limit: z.number().int().min(1).max(25).default(5) }),
       annotations: {
         readOnlyHint: true,
@@ -347,7 +346,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Submit AI File Summaries",
       description:
-        "Checkpoint file-level semantic summaries. A single-chunk file can be submitted before its chunk summary; the server derives that chunk summary from the file summary. Multi-chunk files still require every chunk summary first.",
+        "Save file summaries. A fastPath file may be submitted before its chunk summary.",
       inputSchema: z.object({
         sessionId: z.string().length(64),
         summaries: z.array(fileSemanticSummarySchema).min(1).max(25),
@@ -371,7 +370,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read AI Curation Context",
       description:
-        "Page through completed file summaries so the Curator Agent can classify systems and propose a sourced graph patch.",
+        "Page completed file summaries.",
       inputSchema: z.object({
         offset: z.number().int().min(0).default(0),
         limit: z.number().int().min(1).max(100).default(20),
@@ -390,7 +389,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Complete AI Bootstrap",
       description:
-        "Mark bootstrap complete only after every file is summarized and an audit-clean curated graph with the supplied digest has been applied.",
+        "Complete bootstrap when coverage is total and the graph audit is clean.",
       inputSchema: z.object({
         sessionId: z.string().length(64),
         graphDigest: z.string().length(64),
@@ -412,7 +411,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "SemanticTrellis Status",
       description:
-        "Return bootstrap state, file count, curated graph size, and pending review count for the fixed repository.",
+        "Return project status.",
       inputSchema: z.object({}),
       outputSchema: statusOutputSchema,
       annotations: {
@@ -429,7 +428,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Curated Graph",
       description:
-        "Return the complete curated semantic graph or a bounded incoming, outgoing, or bidirectional neighborhood around one stable node ID.",
+        "Return the curated graph or a neighborhood around one node.",
       inputSchema: z.object({
         nodeId: z.string().min(1).optional().describe("Stable node ID. Omit for the complete curated graph."),
         depth: z.number().int().min(0).max(8).default(1),
@@ -453,7 +452,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Search Curated Graph",
       description:
-        "Search stable nodes by ID, name, kind, summary, tags, and repository-relative source path.",
+        "Search curated nodes.",
       inputSchema: z.object({
         query: z.string().min(1),
         limit: z.number().int().min(1).max(50).default(10),
@@ -474,7 +473,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Review Queue",
       description:
-        "Return repository changes waiting for semantic review, including the curated nodes related through source provenance.",
+        "Return pending review items.",
       inputSchema: z.object({
         pathPrefix: z.string().optional(),
         limit: z.number().int().min(1).max(500).default(100),
@@ -508,7 +507,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Incremental Review Context",
       description:
-        "Build a compact review package for pending structural deltas. candidatePatch is safe to validate for implementation-only edits and pure file moves. draftPatch clones affected nodes for signature, reference, add, and remove changes and does not mark them reviewed.",
+        "Return structural review deltas, a safe candidatePatch, and a draftPatch that does not mark items reviewed.",
       inputSchema: z.object({
         pathPrefix: z.string().optional(),
         limit: z.number().int().min(1).max(500).default(100),
@@ -532,7 +531,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Audit Curated Graph",
       description:
-        "Audit graph integrity, source provenance, stale paths, and unclassified sources without changing repository state.",
+        "Audit the curated graph without writing it.",
       inputSchema: z.object({
         severity: z.enum(["all", "error", "warning", "info"]).default("all"),
         limit: z.number().int().min(1).max(1000).default(200),
@@ -565,7 +564,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Sync Repository Delta",
       description:
-        "Scan the fixed repository, update disposable local snapshot state, and queue changed files for review. This never edits the curated graph.",
+        "Record repository deltas for review. Does not edit the curated graph.",
       inputSchema: z.object({}),
       outputSchema: syncOutputSchema,
       annotations: {
@@ -583,7 +582,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Refresh Structural Contributions",
       description:
-        "Build or incrementally refresh disposable per-file symbols, references, and resolved structural edges for the fixed repository.",
+        "Refresh the disposable structural index.",
       inputSchema: z.object({}),
       outputSchema: structuralBuildMetricsSchema,
       annotations: {
@@ -601,7 +600,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Symbol-Aware Structural Grep",
       description:
-        "Search indexed source exhaustively, repair stale contributions once, group matches by symbol importance, deprioritize tests and synthetic callbacks, and optionally filter by symbol kind or return bounded source context.",
+        "Search source and group hits by symbol. Test matches drop when a production hit exists.",
       inputSchema: z.object({
         pattern: z.string().min(1),
         fixed: z.boolean().default(true),
@@ -655,7 +654,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read File Symbols",
       description:
-        "Return every symbol and source span extracted from one exact repository path or unique basename, repairing stale contributions and optionally including bounded bodies.",
+        "List symbols for one file.",
       inputSchema: z.object({
         file: z.string().min(1),
         includeBody: z.boolean().default(false),
@@ -683,7 +682,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Trace Structural References",
       description:
-        "Trace resolved incoming callers or outgoing dependencies around a symbol, repair stale contributions, return near-name suggestions on misses, and optionally include bounded bodies.",
+        "Trace callers or callees of one symbol.",
       inputSchema: z.object({
         query: z.string().min(1),
         direction: z.enum(["incoming", "outgoing", "both"]).default("incoming"),
@@ -713,7 +712,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Search Structural Symbols",
       description:
-        "Rank symbols by natural-language terms across names, qualified names, signatures, paths, incoming degree, and curated provenance.",
+        "Rank symbols by natural-language terms.",
       inputSchema: z.object({
         query: z.string().min(1),
         limit: z.number().int().min(1).max(100).default(20),
@@ -744,7 +743,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Ask About Repository Code",
       description:
-        "Answer a natural-language repository question with ranked symbols, bounded verified source bodies, up to two 1-hop callee cruxes, and up to two matching curated-node summaries.",
+        "Answer with ranked symbols, short source, up to two callee cruxes, and matching curated nodes.",
       inputSchema: z.object({
         query: z.string().min(1),
         limit: z.number().int().min(1).max(50).default(4),
@@ -779,7 +778,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Validate Curation Patch",
       description:
-        "Apply a proposed patch in memory, run repository-aware audit, and return a token bound to the exact patch, current graph, and selected review entries. Call this before apply_patch.",
+        "Validate a patch in memory and return a token. Call this before apply_patch.",
       inputSchema: z.object({ patch: graphPatchSchema }),
       outputSchema: validationOutputSchema,
       annotations: {
@@ -797,7 +796,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Apply Validated Curation Patch",
       description:
-        "Modify the versioned curated graph using the exact patch and validation token returned by validate_patch. Rejects changed graph, patch, or selected review entries.",
+        "Apply the exact patch and token from validate_patch.",
       inputSchema: z.object({
         patch: graphPatchSchema,
         validationToken: z.string().length(64),

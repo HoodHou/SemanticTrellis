@@ -19,10 +19,7 @@ node dist/mcp/stdio.js /absolute/path/to/repository
 The process waits for an MCP host on standard input. Standard output is reserved
 for protocol messages; diagnostics are written to standard error.
 
-Server instructions include the unsupported-artifact projection workflow. The
-server inventories unsupported paths automatically, validates deterministic
-`.strellis.json` and `.strellis.md` documents without writing, and registers
-only an unchanged source-bound proposal and token after host approval. See
+Server instructions only keep the approval and projection rules. See
 [Artifact projections](../artifact-projections.md).
 
 Structural tools support TypeScript, JavaScript, C#, Python, Python stubs, and

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.4 - 2026-10-16
+
+### Changed
+
+- Shorten MCP server instructions and tool descriptions to the operating rules.
+- Shorten this repository's curated-node summaries.
+
 ## 0.10.3 - 2026-10-16
 
 ### Added
