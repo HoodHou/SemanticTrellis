@@ -106,8 +106,9 @@ more stable than the symbol graph.
 5. Freeze and hash the complete eligible-text repository snapshot.
 6. Split every eligible text file and registered projection into stable source chunks.
 7. Let the connected Agent summarize every chunk with resumable checkpoints.
-   A file that is already a single chunk can submit its file summary directly;
-   that submission also records the chunk summary.
+   Files up to 20,000 characters are one chunk and can submit a file summary
+   directly; that submission also records the chunk summary. Generated lockfiles
+   are not summarized and do not block a clean audit.
 8. Roll chunk summaries and structural evidence into one semantic summary per
    file. Single-chunk files skip the separate rollup round trip.
 9. Page the complete summary corpus to the Curator Agent.

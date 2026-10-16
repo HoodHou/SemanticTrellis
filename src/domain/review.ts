@@ -1,3 +1,4 @@
+import { isGeneratedLockfile } from "./config.js";
 import {
   SCHEMA_VERSION,
   type CuratedGraph,
@@ -291,7 +292,7 @@ export function createInitialReviewQueue(
   snapshot: RepositorySnapshot,
   graph: CuratedGraph,
 ): ReviewQueue {
-  const items: ReviewItem[] = snapshot.files.map((file) => ({
+  const items: ReviewItem[] = snapshot.files.filter((file) => !isGeneratedLockfile(file.path)).map((file) => ({
     id: `bootstrap:${file.path}:${file.hash}`,
     path: file.path,
     changeKind: "added",
@@ -311,8 +312,9 @@ export function createReviewItems(
   previous: StructuralIndex | null = null,
   next: StructuralIndex | null = null,
 ): ReviewItem[] {
-  const pairs = movePairs(changes);
-  return changes.map((change) => ({
+  const semanticChanges = changes.filter((change) => !isGeneratedLockfile(change.path));
+  const pairs = movePairs(semanticChanges);
+  return semanticChanges.map((change) => ({
     id: reviewId(change),
     path: change.path,
     changeKind: change.kind,

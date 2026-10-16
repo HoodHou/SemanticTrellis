@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.1 - 2026-10-16
+
+### Changed
+
+- A clean Git tree reuses the structural index without scanning the repository.
+- Ask's one-hop crux prefers a callee in another file.
+- Grep omits test groups when a production match exists.
+- The default bootstrap chunk size is 20,000 characters.
+- Generated lockfiles are left out of bootstrap summaries, review items, and
+  unclassified-source audit findings.
+- `review_context` returns structural deltas by default and reports how many
+  unclassified bootstrap items were omitted.
+
 ## 0.10.0 - 2026-10-16
 
 ### Added

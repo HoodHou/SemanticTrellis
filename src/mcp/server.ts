@@ -145,7 +145,7 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
         sourceDisclosureApproved: z.literal(true).describe(
           "Must be true only after the user explicitly authorizes sending eligible repository text to the connected Agent model.",
         ),
-        maxChunkCharacters: z.number().int().min(2_000).max(50_000).default(12_000),
+        maxChunkCharacters: z.number().int().min(2_000).max(50_000).default(20_000),
       }),
       outputSchema: agentBootstrapStartOutputSchema,
       annotations: {
@@ -508,10 +508,11 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
     {
       title: "Read Incremental Review Context",
       description:
-        "Build a compact review package for the pending queue: structural change class, changed symbols, cross-file reference deltas, affected curated-node summaries, and a candidate patch that marks implementation-only edits and pure file moves reviewed.",
+        "Build a compact review package for pending structural deltas: change class, changed symbols, cross-file reference deltas, affected curated-node summaries, and a candidate patch for implementation-only edits and pure file moves. Unclassified bootstrap items stay out unless includeUnclassified is set.",
       inputSchema: z.object({
         pathPrefix: z.string().optional(),
         limit: z.number().int().min(1).max(500).default(100),
+        includeUnclassified: z.boolean().default(false),
       }),
       outputSchema: reviewContextOutputSchema,
       annotations: {
@@ -520,9 +521,9 @@ export function createSemanticTrellisMcpServer(repositoryRoot: string): McpServe
         openWorldHint: false,
       },
     },
-    async ({ pathPrefix, limit }) =>
+    async ({ pathPrefix, limit, includeUnclassified }) =>
       safe(async () => ({
-        ...(await buildReviewContext(root, pathPrefix, limit)),
+        ...(await buildReviewContext(root, pathPrefix, limit, includeUnclassified)),
       })),
   );
 

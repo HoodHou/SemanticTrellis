@@ -59,6 +59,19 @@ const DEFAULT_EXCLUDED_DIRECTORIES = [
   "vendor",
 ] as const;
 
+const GENERATED_LOCKFILES = new Set([
+  "bun.lock",
+  "npm-shrinkwrap.json",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+]);
+
+export function isGeneratedLockfile(path: string): boolean {
+  const name = path.split("/").at(-1)?.toLowerCase() ?? "";
+  return GENERATED_LOCKFILES.has(name);
+}
+
 export function normalizeProjectId(name: string): string {
   const normalized = name
     .trim()

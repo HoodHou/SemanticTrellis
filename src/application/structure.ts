@@ -18,6 +18,7 @@ import {
   attachCrossLayerReferences,
   crossLayerFingerprint,
 } from "../structural/cross-layer.js";
+import { EXTRACTOR_FINGERPRINT, pathMayHaveStructure } from "../structural/freshness.js";
 import { resolveStructuralGraph } from "../structural/resolver.js";
 
 function contributionReferenceNames(contribution: FileContribution): string[] {
@@ -119,16 +120,56 @@ function aggregateResolution(
   );
 }
 
+function directoryAllowed(path: string, excluded: ReadonlySet<string>): boolean {
+  return !path.split("/").some((segment) => excluded.has(segment.toLowerCase()));
+}
+
+function cachedStructuralResult(index: StructuralIndex, started: number): StructuralBuildResult {
+  const values = Object.values(index.contributions);
+  return {
+    index,
+    metrics: {
+      discoveryMode: index.discoveryMode,
+      filesDiscovered: values.length,
+      filesSupported: values.length,
+      parsedFiles: 0,
+      reusedFiles: values.length,
+      removedFiles: 0,
+      resolvedFiles: 0,
+      symbols: values.reduce((total, contribution) => total + contribution.symbols.length, 0),
+      references: values.reduce((total, contribution) => total + contribution.references.length, 0),
+      diagnostics: values.reduce((total, contribution) => total + contribution.diagnostics.length, 0),
+      diagnosticFiles: values.filter((contribution) => contribution.diagnostics.length > 0).length,
+      edges: index.edges.length,
+      ...index.resolution,
+      durationMs: Number((performance.now() - started).toFixed(3)),
+    },
+  };
+}
+
 async function hasStaleContribution(root: string, index: StructuralIndex): Promise<boolean> {
+  if (index.extractorFingerprint !== EXTRACTOR_FINGERPRINT) return true;
   const gitState = await readGitRepositoryState(root);
   if (index.discoveryMode === "git" && gitState !== null) {
     if (gitState.revision !== index.repositoryRevision) {
       return true;
     }
-    const { createDefaultLanguageRegistry } = await import("../structural/registry.js");
-    const registry = createDefaultLanguageRegistry();
     const config = await loadConfig(root);
     const excluded = new Set(config.source.excludeDirectories.map((value) => value.toLowerCase()));
+    const untracked = new Set(gitState.untrackedPaths);
+    const relevantTracked = gitState.changedPaths.filter((path) =>
+      !untracked.has(path) &&
+      directoryAllowed(path, excluded) &&
+      (pathMayHaveStructure(path) || index.contributions[path] !== undefined),
+    );
+    const structuralUntracked = gitState.untrackedPaths.filter((path) =>
+      directoryAllowed(path, excluded) && pathMayHaveStructure(path),
+    );
+    if (relevantTracked.length === 0 && structuralUntracked.length === 0) {
+      return false;
+    }
+    const { createDefaultLanguageRegistry } = await import("../structural/registry.js");
+    const registry = createDefaultLanguageRegistry();
     const allowed = (path: string): boolean =>
       !path.split("/").some((segment) => excluded.has(segment.toLowerCase())) &&
       registry.adapterFor(path) !== null;
@@ -198,8 +239,11 @@ async function hasStaleContribution(root: string, index: StructuralIndex): Promi
 export async function buildStructuralIndex(root: string): Promise<StructuralBuildResult> {
   const started = performance.now();
   const absoluteRoot = resolve(root);
-  const config = await loadConfig(absoluteRoot);
   const previous = await loadStructuralIndex(absoluteRoot);
+  if (previous !== null && !await hasStaleContribution(absoluteRoot, previous)) {
+    return cachedStructuralResult(previous, started);
+  }
+  const config = await loadConfig(absoluteRoot);
   const snapshot = await loadSnapshot(absoluteRoot);
   // Compiler-backed adapters are intentionally loaded only for a real refresh.
   // Read-only cached grep/trace processes should not pay the TypeScript Compiler
@@ -410,6 +454,7 @@ export async function buildStructuralIndex(root: string): Promise<StructuralBuil
     resolutionByFile,
     referenceFilesByName,
     referenceNamesByFile,
+    extractorFingerprint: EXTRACTOR_FINGERPRINT,
   };
   const repositoryStateChanged = previous?.repositoryRevision !== index.repositoryRevision ||
     JSON.stringify(previous?.untrackedPaths ?? []) !== JSON.stringify(index.untrackedPaths);

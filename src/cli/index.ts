@@ -31,7 +31,7 @@ Usage:
   strellis bootstrap-status [repository]
   strellis curate <patch-file> [repository]
   strellis sync [repository]
-  strellis review-context [repository] [--in <path>] [--json]
+  strellis review-context [repository] [--in <path>] [--include-unclassified] [--json]
   strellis audit [repository]
   strellis status [repository]
   strellis structure [repository] [--json]
@@ -143,7 +143,7 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
           sourceDisclosureApproved: parsed.flags.has("--allow-source-disclosure"),
           maxChunkCharacters: positiveInteger(
             parsed.options.get("--max-chunk-characters"),
-            12_000,
+            20_000,
             "--max-chunk-characters",
           ),
         });
@@ -186,6 +186,8 @@ export async function runCli(args: string[], io: CliIo = consoleIo): Promise<num
         const result = await buildReviewContext(
           rootFrom(parsed.positionals[0]),
           parsed.options.get("--in"),
+          100,
+          parsed.flags.has("--include-unclassified"),
         );
         if (parsed.flags.has("--json")) {
           io.out(JSON.stringify(result, null, 2));

@@ -12,6 +12,7 @@ import {
   type ChunkSummarySubmission,
   type FileSemanticSummary,
 } from "../domain/agent-bootstrap.js";
+import { isGeneratedLockfile } from "../domain/config.js";
 import { auditGraph } from "../domain/graph.js";
 import type { FileContribution } from "../domain/structural.js";
 import { digestBytes, digestJson } from "../infrastructure/digest.js";
@@ -306,7 +307,7 @@ export async function startAgentBootstrap(
   if (snapshot === null) throw new Error("Bootstrap could not create a repository snapshot.");
   assertProjectionReadiness(await getProjectionStatus(root, 0, 1));
 
-  const maxChunkCharacters = Math.max(2_000, Math.min(50_000, Math.floor(options.maxChunkCharacters ?? 12_000)));
+  const maxChunkCharacters = Math.max(2_000, Math.min(50_000, Math.floor(options.maxChunkCharacters ?? 20_000)));
   const structural = await buildStructuralIndex(root);
   const snapshotDigest = digestJson(snapshot);
   const sessionId = digestJson({ snapshotDigest, maxChunkCharacters });
@@ -343,6 +344,7 @@ export async function startAgentBootstrap(
   const units: BootstrapUnit[] = [];
   let reusedChunkSummaries = 0;
   for (const file of snapshot.files) {
+    if (isGeneratedLockfile(file.path)) continue;
     const source = await readFrozenSource(root, file.path, file.hash);
     for (const unit of chunkSource(file.path, file.hash, source, maxChunkCharacters)) {
       const cached = priorUnits.get(unit.id)?.summary ?? null;
@@ -355,6 +357,7 @@ export async function startAgentBootstrap(
   const fileSummaries: Record<string, FileSemanticSummary> = {};
   let reusedFileSummaries = 0;
   for (const file of snapshot.files) {
+    if (isGeneratedLockfile(file.path)) continue;
     const cached = prior?.fileSummaries[file.path];
     if (cached?.hash === file.hash) {
       fileSummaries[file.path] = structuredClone(cached);

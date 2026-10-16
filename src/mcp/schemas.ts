@@ -156,6 +156,7 @@ export const reviewItemSchema = z.object({
 export const reviewContextOutputSchema = z.object({
   total: z.number().int().nonnegative(),
   returned: z.number().int().nonnegative(),
+  unclassified: z.number().int().nonnegative(),
   items: z.array(reviewItemSchema.extend({
     affectedNodes: z.array(z.object({
       id: z.string(),

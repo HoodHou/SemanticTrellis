@@ -29,6 +29,7 @@ export interface ReviewContextItem {
 export interface ReviewContext {
   total: number;
   returned: number;
+  unclassified: number;
   items: ReviewContextItem[];
   candidatePatch: GraphPatch | null;
 }
@@ -43,12 +44,17 @@ export async function buildReviewContext(
   root: string,
   pathPrefix?: string,
   limit = 100,
+  includeUnclassified = false,
 ): Promise<ReviewContext> {
   const [queue, graph] = await Promise.all([loadReviewQueue(root), loadGraph(root)]);
   const prefix = normalizePrefix(pathPrefix);
-  const matching = prefix === null
+  const prefixed = prefix === null
     ? queue.items
     : queue.items.filter((item) => item.path === prefix || item.path.startsWith(`${prefix}/`));
+  const unclassified = prefixed.filter((item) => item.structuralDelta === null).length;
+  const matching = includeUnclassified
+    ? prefixed
+    : prefixed.filter((item) => item.structuralDelta !== null);
   const selected = matching.slice(0, Math.max(1, Math.min(500, Math.floor(limit))));
   const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
   const items = selected.map((item) => {
@@ -86,6 +92,7 @@ export async function buildReviewContext(
   return {
     total: matching.length,
     returned: items.length,
+    unclassified,
     items,
     candidatePatch: reviewCandidatePatch(matching, graph),
   };

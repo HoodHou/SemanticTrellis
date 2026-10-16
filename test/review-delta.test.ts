@@ -104,6 +104,8 @@ describe("structural review deltas", () => {
     await syncProject(root);
 
     const context = await buildReviewContext(root);
+    expect(context.unclassified).toBe(1);
+    expect(context.items.map((entry) => entry.path)).toEqual(["src/beta.ts"]);
     const item = context.items.find((entry) => entry.path === "src/beta.ts");
     expect(item?.structuralDelta?.nature).toBe("cross-node-reference-changed");
     expect(item?.structuralDelta?.referenceChanges).toEqual(

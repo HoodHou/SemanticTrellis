@@ -1,3 +1,4 @@
+import { isGeneratedLockfile } from "./config.js";
 import {
   SCHEMA_VERSION,
   type AuditIssue,
@@ -144,6 +145,7 @@ export function auditGraph(
   if (snapshotPaths !== null) {
     const covered = new Set(graph.nodes.flatMap((node) => node.sources.map((source) => source.path)));
     for (const path of [...snapshotPaths].sort()) {
+      if (isGeneratedLockfile(path)) continue;
       if (!covered.has(path)) {
         issues.push({
           severity: "info",

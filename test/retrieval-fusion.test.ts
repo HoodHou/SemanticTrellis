@@ -79,6 +79,43 @@ export function validateCurationPatch(): string {
     expect(asked.curatedNodes[0]?.node.summary).toContain("validateCurationPatch");
   });
 
+  it("prefers a cross-file callee over same-file helpers", async () => {
+    const root = await mkdtemp(join(tmpdir(), "semantic-trellis-callee-"));
+    temporaryRoots.push(root);
+    await writeRepoFile(
+      root,
+      "src/domain/graph.ts",
+      `export function applyGraphPatch(): string {
+  return "referential integrity gate";
+}
+`,
+    );
+    await writeRepoFile(
+      root,
+      "src/application/curate.ts",
+      `import { applyGraphPatch } from "../domain/graph.js";
+function reviewedPaths(): string { return "paths"; }
+function validationToken(): string { return "token"; }
+export function validateCurationPatch(): string {
+  reviewedPaths();
+  validationToken();
+  return applyGraphPatch();
+}
+`,
+    );
+    await initializeProject(root);
+    await bootstrapProject(root);
+    const asked = await askProject(root, "validate curation patch", {
+      limit: 1,
+      pathPrefix: "src/application",
+      repairStale: false,
+    });
+    expect(asked.hits[0]?.symbol.name).toBe("validateCurationPatch");
+    expect(asked.calleeCruxes.map((crux) => crux.symbolId).join(" ")).toContain("applyGraphPatch");
+    expect(asked.calleeCruxes.some((crux) => crux.symbolId.includes("reviewedPaths"))).toBe(false);
+    expect(asked.calleeCruxes.some((crux) => crux.symbolId.includes("validationToken"))).toBe(false);
+  });
+
   it("deprioritizes test callbacks and can filter grep by symbol kind", async () => {
     const root = await mkdtemp(join(tmpdir(), "semantic-trellis-grep-"));
     temporaryRoots.push(root);
@@ -108,7 +145,14 @@ export function validateCurationPatch(): string {
     });
     expect(ranked.groups[0]?.symbolName).toBe("applyGraphPatch");
     expect(ranked.groups[0]?.path).toBe("src/core.ts");
-    expect(ranked.groups.some((group) => group.symbolKind === "callback")).toBe(true);
+    expect(ranked.groups.some((group) => group.symbolKind === "callback")).toBe(false);
+
+    const tests = await grepStructure(root, "Graph patch rejected", {
+      fixed: true,
+      pathPrefix: "test",
+      repairStale: false,
+    });
+    expect(tests.groups.some((group) => group.symbolKind === "callback")).toBe(true);
 
     const functions = await grepStructure(root, "Graph patch rejected", {
       fixed: true,

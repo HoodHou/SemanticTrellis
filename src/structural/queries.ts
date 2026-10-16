@@ -261,7 +261,7 @@ export function selectCalleeCruxSymbols(
   }
   const terms = [...new Set(normalizedWords(query.trim().toLowerCase()).map(normalizedSearchTerm))];
   const testIntent = terms.some((term) => TEST_INTENT_TERMS.has(term));
-  const ranked: Array<{ symbol: StructuralSymbol; score: number }> = [];
+  const ranked: Array<{ symbol: StructuralSymbol; score: number; crossFile: boolean }> = [];
   const seen = new Set<string>();
   hits.forEach((hit, hitIndex) => {
     for (const edge of outgoing.get(hit.symbol.id) ?? []) {
@@ -272,12 +272,18 @@ export function selectCalleeCruxSymbols(
       seen.add(symbol.id);
       const haystack = `${symbol.name} ${symbol.qualifiedName} ${symbol.signature}`.toLowerCase();
       const overlap = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
-      const scarcity = 1 / (1 + (inDegree.get(symbol.id) ?? 0));
-      const relevance = (hits.length - hitIndex) + overlap * 2;
-      ranked.push({ symbol, score: relevance * (0.5 + scarcity) });
+      const importance = Math.log2((inDegree.get(symbol.id) ?? 0) + 1);
+      ranked.push({
+        symbol,
+        crossFile: symbol.path !== hit.symbol.path,
+        score: overlap * 10 + importance + (hits.length - hitIndex),
+      });
     }
   });
-  return ranked
+  const pool = ranked.some((item) => item.crossFile)
+    ? ranked.filter((item) => item.crossFile)
+    : ranked;
+  return pool
     .sort((left, right) => right.score - left.score || left.symbol.id.localeCompare(right.symbol.id))
     .slice(0, Math.max(0, Math.floor(limit)))
     .map((item) => item.symbol);

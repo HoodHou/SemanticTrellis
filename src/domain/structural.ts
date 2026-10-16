@@ -115,6 +115,7 @@ export interface StructuralIndex {
   resolutionByFile: Record<string, StructuralResolutionMetrics>;
   referenceFilesByName: Record<string, string[]>;
   referenceNamesByFile: Record<string, string[]>;
+  extractorFingerprint: string;
 }
 
 export interface StructuralResolutionMetrics {

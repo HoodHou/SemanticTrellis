@@ -229,7 +229,24 @@ async function grepBuiltIndex(
     }
   }
 
-  const ranked = [...groups.values()].sort(
+  let groupList = [...groups.values()];
+  const preserveTests = (prefix !== null && isTestPath(prefix)) || kinds?.has("callback") === true;
+  if (!preserveTests) {
+    const production = groupList.filter((group) =>
+      !isTestPath(group.path) && !isSyntheticTestCallback(group),
+    );
+    if (production.length > 0) groupList = production;
+  }
+  totalHits = groupList.reduce((total, group) => total + group.totalHits, 0);
+  symbolAttributed = groupList.reduce(
+    (total, group) => total + (group.symbolKind === "file" ? 0 : group.totalHits),
+    0,
+  );
+  curatedAttributed = groupList.reduce(
+    (total, group) => total + (group.curatedNodeIds.length > 0 ? group.totalHits : 0),
+    0,
+  );
+  const ranked = groupList.sort(
     (left, right) =>
       grepRank(right) - grepRank(left) ||
       right.inDegree - left.inDegree ||

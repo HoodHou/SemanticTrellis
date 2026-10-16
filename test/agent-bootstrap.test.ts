@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applyValidatedCurationPatch,
+  auditProject,
   bootstrapProject,
   finishAgentBootstrap,
   getAgentBootstrapStatus,
@@ -263,5 +264,27 @@ describe("Agent-driven AI bootstrap", () => {
     expect(complete.chunkCoverage).toBe(1);
     expect(complete.fileCoverage).toBe(1);
     expect(complete.stage).toBe("ready-for-curation");
+  });
+
+  it("keeps a 15k-character file on the fast path and skips package-lock summaries", async () => {
+    const root = await fixture();
+    await writeFile(
+      join(root, "package-lock.json"),
+      `${JSON.stringify({ lockfileVersion: 3, packages: {} }, null, 2)}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(root, "src", "medium.ts"),
+      `export const medium = "${"m".repeat(15_000)}";\n`,
+      "utf8",
+    );
+    const started = await startAgentBootstrap(root, { sourceDisclosureApproved: true });
+    const batch = await getNextBootstrapSourceBatch(root, 80_000, 20);
+    expect(batch.units.some((unit) => unit.path === "package-lock.json")).toBe(false);
+    const medium = batch.units.find((unit) => unit.path === "src/medium.ts");
+    expect(medium).toMatchObject({ fastPath: true, chunkCount: 1 });
+    expect(started.status.totalFiles).toBe(3);
+    const audit = await auditProject(root);
+    expect(audit.issues.some((issue) => issue.subject === "package-lock.json")).toBe(false);
   });
 });
